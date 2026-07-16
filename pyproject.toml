@@ -29,7 +29,7 @@ data = [
 research = [
   "lightgbm>=4.5,<5",
   "mlflow>=3.0,<4",
-  "numpy>=2.0,<3",
+  "numpy>=2.0,<2.3",
   "scikit-learn>=1.6,<2",
   "scipy>=1.14,<2",
 ]
@@ -40,6 +40,10 @@ services = [
 ]
 optimization = ["cvxpy>=1.6,<2"]
 ui = ["streamlit>=1.41,<2"]
+free-data = [
+  "akshare>=1.18,<2",
+  "baostock>=0.8,<1",
+]
 
 [project.scripts]
 aquant = "aquant.cli:main"
@@ -97,4 +101,3 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = "yaml"
 ignore_missing_imports = false
-

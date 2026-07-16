@@ -1,7 +1,7 @@
 .PHONY: bootstrap lock test quality format config-check infra-config infra-up infra-down
 
 bootstrap:
-	uv sync --group dev
+	uv sync --group dev --extra data --extra research --extra free-data
 	uv run pre-commit install
 
 lock:
