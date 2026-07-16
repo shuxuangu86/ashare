@@ -1,0 +1,35 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.env
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime data and state
+data/raw/**
+data/standardized/**
+data/point_in_time/**
+data/factors/**
+data/backtests/**
+data/quarantine/**
+!data/**/.gitkeep
+logs/**
+artifacts/**
+
+# Local service volumes and credentials
+.docker-data/
+config/local*.yaml
+config/secrets*.yaml
+*.pem
+*.key
+
+# Notebook outputs
+.ipynb_checkpoints/
+

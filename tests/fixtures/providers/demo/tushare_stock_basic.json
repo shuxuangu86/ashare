@@ -1,0 +1,23 @@
+{
+  "request_id": "stock-basic-20260716",
+  "code": 0,
+  "msg": null,
+  "data": {
+    "fields": [
+      "ts_code",
+      "symbol",
+      "name",
+      "market",
+      "exchange",
+      "list_status",
+      "list_date",
+      "delist_date"
+    ],
+    "items": [
+      ["600000.SH", "600000", "浦发银行", "主板", "SSE", "L", "19991110", null],
+      ["688001.SH", "688001", "华兴源创", "科创板", "SSE", "L", "20190722", ""],
+      ["300001.SZ", "300001", "特锐德", "创业板", "SZSE", "L", "20091030", null]
+    ]
+  }
+}
+

@@ -1,0 +1,9 @@
+risk:
+  max_single_name_weight: 0.05
+  max_industry_weight: 0.30
+  max_daily_turnover: 0.20
+  max_volume_participation: 0.10
+  reject_stale_market_data: true
+  reject_unpublished_data_release: true
+  kill_switch_required: true
+

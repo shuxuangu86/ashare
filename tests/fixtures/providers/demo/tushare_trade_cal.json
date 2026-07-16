@@ -1,0 +1,15 @@
+{
+  "request_id": "trade-cal-20260716",
+  "code": 0,
+  "msg": null,
+  "data": {
+    "fields": ["exchange", "cal_date", "is_open", "pretrade_date"],
+    "items": [
+      ["SSE", "20260715", 1, "20260714"],
+      ["SSE", "20260716", 1, "20260715"],
+      ["SSE", "20260718", 0, "20260717"],
+      ["SZSE", "20260716", 1, "20260715"]
+    ]
+  }
+}
+

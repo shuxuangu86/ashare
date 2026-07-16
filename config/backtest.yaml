@@ -1,0 +1,8 @@
+backtest:
+  signal_time: close
+  earliest_fill: next_session
+  fill_price_model: next_open
+  initial_cash_cny: 1000000
+  allow_same_bar_fill: false
+  deterministic_seed: 20260716
+

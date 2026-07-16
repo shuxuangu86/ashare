@@ -1,0 +1,6 @@
+broker:
+  name: paper
+  mode: PAPER
+  enabled: true
+  live_submission_enabled: false
+

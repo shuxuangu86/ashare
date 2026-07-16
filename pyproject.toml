@@ -1,0 +1,100 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aquant"
+version = "0.1.0"
+description = "Point-in-time safe A-share quantitative research and trading system"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "AQuant Team" }]
+dependencies = [
+  "pydantic>=2.10,<3",
+  "pyyaml>=6.0.2,<7",
+  "structlog>=24.4,<26",
+]
+
+[project.optional-dependencies]
+data = [
+  "duckdb>=1.2,<2",
+  "pandas>=2.2,<3",
+  "polars>=1.20,<2",
+  "pyarrow>=18,<22",
+  "psycopg[binary,pool]>=3.2,<4",
+  "redis>=5.2,<7",
+  "sqlalchemy>=2.0,<3",
+]
+research = [
+  "lightgbm>=4.5,<5",
+  "mlflow>=3.0,<4",
+  "numpy>=2.0,<3",
+  "scikit-learn>=1.6,<2",
+  "scipy>=1.14,<2",
+]
+services = [
+  "fastapi>=0.115,<1",
+  "prefect>=3.1,<4",
+  "uvicorn[standard]>=0.34,<1",
+]
+optimization = ["cvxpy>=1.6,<2"]
+ui = ["streamlit>=1.41,<2"]
+
+[project.scripts]
+aquant = "aquant.cli:main"
+
+[dependency-groups]
+dev = [
+  "hypothesis>=6.120,<7",
+  "mypy>=1.14,<2",
+  "pre-commit>=4.0,<5",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6.0,<8",
+  "ruff>=0.9,<1",
+  "types-pyyaml>=6.0.12,<7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aquant"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --cov=aquant --cov-report=term-missing --cov-fail-under=85"
+testpaths = ["tests"]
+xfail_strict = true
+
+[tool.coverage.run]
+branch = true
+source = ["aquant"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF012"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aquant"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+pretty = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "yaml"
+ignore_missing_imports = false
+

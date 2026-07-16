@@ -1,0 +1,32 @@
+environment: development
+mode: BACKTEST
+timezone: Asia/Shanghai
+
+database:
+  host: 127.0.0.1
+  port: 5432
+  database: aquant
+  user: aquant
+  password: aquant-local-only
+  pool_size: 10
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  database: 0
+
+services:
+  prefect_api_url: http://127.0.0.1:4200/api
+  mlflow_tracking_uri: http://127.0.0.1:5000
+
+paths:
+  data: data
+  logs: logs
+  artifacts: artifacts
+
+live_trading:
+  enabled: false
+  tier: READ_ONLY
+  require_manual_confirmation: true
+  max_capital_cny: 0
+

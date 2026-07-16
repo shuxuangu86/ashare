@@ -1,0 +1,6 @@
+CREATE DATABASE prefect;
+CREATE DATABASE mlflow;
+
+\connect aquant
+CREATE EXTENSION IF NOT EXISTS vector;
+
