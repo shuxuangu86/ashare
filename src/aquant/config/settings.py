@@ -68,8 +68,17 @@ class LiveTradingSettings(StrictSettingsModel):
 
 
 class TushareDataSettings(StrictSettingsModel):
+    enabled: bool = False
     token_env: str = "TUSHARE_TOKEN"
     timeout_seconds: int = Field(default=30, ge=1, le=300)
+
+
+class AkshareDataSettings(StrictSettingsModel):
+    enabled: bool = True
+
+
+class BaostockDataSettings(StrictSettingsModel):
+    enabled: bool = True
 
 
 class DataSettings(StrictSettingsModel):
@@ -77,10 +86,12 @@ class DataSettings(StrictSettingsModel):
     timezone: str = "Asia/Shanghai"
     raw_immutable: bool = True
     point_in_time_required: bool = True
-    primary_provider: str = "tushare"
-    validation_provider: str | None = None
+    primary_provider: str = "akshare"
+    validation_provider: str | None = "baostock"
     quarantine_on_quality_failure: bool = True
     tushare: TushareDataSettings = Field(default_factory=TushareDataSettings)
+    akshare: AkshareDataSettings = Field(default_factory=AkshareDataSettings)
+    baostock: BaostockDataSettings = Field(default_factory=BaostockDataSettings)
 
     @model_validator(mode="after")
     def require_safety_guards(self) -> Self:
@@ -88,6 +99,8 @@ class DataSettings(StrictSettingsModel):
             raise ValueError("raw immutability and point-in-time access cannot be disabled")
         if not self.quarantine_on_quality_failure:
             raise ValueError("quality failures must enter quarantine")
+        if self.primary_provider == self.validation_provider:
+            raise ValueError("primary and validation providers must be different")
         return self
 
 

@@ -3,9 +3,14 @@ data:
   timezone: Asia/Shanghai
   raw_immutable: true
   point_in_time_required: true
-  primary_provider: tushare
-  validation_provider: null
+  primary_provider: akshare
+  validation_provider: baostock
   quarantine_on_quality_failure: true
+  akshare:
+    enabled: true
+  baostock:
+    enabled: true
   tushare:
+    enabled: false
     token_env: TUSHARE_TOKEN
     timeout_seconds: 30

@@ -9,8 +9,9 @@ AQuant 是一套面向沪深 A 股日频/低频研究的本地量化系统。核
 - 实盘默认关闭，数据或状态异常时停止交易；
 - 相同代码、配置、数据和随机种子产生相同结果。
 
-当前状态：Day 1 已验收，Day 2 数据协议与首个 Tushare Adapter 已完成自动化验收；
-真实 Token 拉取和 PostgreSQL 容器写入等待本机联调。进度见 `docs/development/status.md`。
+当前状态：Day 1、Day 2 已验收；Day 3 开始实现行情模型。开发阶段默认使用 AKShare
+主源和 BaoStock 校验源，Tushare Adapter 保留但默认关闭。进度见
+`docs/development/status.md`。
 
 ## 环境要求
 

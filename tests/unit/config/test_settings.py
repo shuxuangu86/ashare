@@ -30,7 +30,9 @@ def test_all_day_one_configuration_layers_validate_together() -> None:
         environ={},
     )
 
-    assert settings.data.primary_provider == "tushare"
+    assert settings.data.primary_provider == "akshare"
+    assert settings.data.validation_provider == "baostock"
+    assert settings.data.tushare.enabled is False
     assert settings.data.raw_immutable is True
     assert settings.backtest.allow_same_bar_fill is False
     assert settings.risk.kill_switch_required is True
@@ -93,6 +95,7 @@ def test_live_full_is_unavailable() -> None:
         {"data": {"raw_immutable": False}},
         {"data": {"point_in_time_required": False}},
         {"data": {"quarantine_on_quality_failure": False}},
+        {"data": {"primary_provider": "akshare", "validation_provider": "akshare"}},
         {"backtest": {"allow_same_bar_fill": True}},
         {"risk": {"reject_stale_market_data": False}},
         {"risk": {"reject_unpublished_data_release": False}},

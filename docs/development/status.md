@@ -50,3 +50,18 @@ Day 3：
 3. Tushare `daily` / `adj_factor` / `daily_basic` 增量 Adapter；
 4. Standard Parquet 分区写入和批次血缘；
 5. 首批行情结构与金融逻辑校验。
+
+## Day 3：行情基础（进行中）
+
+| 项目 | 状态 | 验收方式 |
+| --- | --- | --- |
+| 免费源策略：AKShare 主源 | 完成 | 严格配置测试 |
+| BaoStock 交叉校验源 | 完成配置 | Adapter 待实现 |
+| Tushare 默认关闭但保留 | 完成 | 配置测试 |
+| 未复权日线领域模型 | 完成 | OHLC、有限值、非负量额测试 |
+| 独立复权因子模型 | 完成 | 正数和有限值测试 |
+| 停牌/ST/涨跌停状态模型 | 完成 | 买卖方向属性测试 |
+| Standard Parquet 批次 | 进行中 | 待血缘与读写测试 |
+| AKShare/BaoStock Adapter | 待实现 | 离线 Fixture 测试 |
+
+当前自动验收：150 项测试通过，覆盖率 98.83%；mypy strict 通过。
