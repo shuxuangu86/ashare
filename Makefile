@@ -1,4 +1,4 @@
-.PHONY: bootstrap lock test quality format config-check infra-config infra-up infra-down
+.PHONY: bootstrap lock test quality format config-check infra-config infra-up infra-down tushare-backfill tushare-status
 
 bootstrap:
 	uv sync --group dev --extra data --extra research --extra free-data --extra optimization --extra services --extra ui
@@ -36,3 +36,9 @@ infra-up:
 
 infra-down:
 	docker compose down
+
+tushare-backfill:
+	uv run python -u scripts/tushare_backfill.py
+
+tushare-status:
+	uv run python -u scripts/tushare_backfill.py --status-only

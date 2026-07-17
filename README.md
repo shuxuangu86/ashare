@@ -64,6 +64,8 @@ make config-check   # 校验基础配置并输出脱敏摘要
 make infra-config   # 校验 Compose 配置
 make infra-up       # 构建并启动基础服务
 make quality        # Ruff + mypy + pytest + 覆盖率门槛
+make tushare-backfill # 断点续传归档 Tushare 全历史日频研究数据
+make tushare-status   # 查看 Tushare 归档检查点
 ```
 
 其他入口：
