@@ -118,6 +118,7 @@ def _archive_pages(
     params: dict[str, Any],
     *,
     optional: bool = False,
+    log_complete: bool = True,
 ) -> list[ArchivedPage]:
     try:
         pages = list(
@@ -132,19 +133,23 @@ def _archive_pages(
             raise
         _log("optional_api_unavailable", api=api_name, code=exc.code)
         return []
-    _log(
-        "dataset_complete",
-        api=api_name,
-        params=params,
-        pages=len(pages),
-        rows=sum(page.row_count for page in pages),
-        resumed=sum(page.resumed for page in pages),
-    )
+    if log_complete:
+        _log(
+            "dataset_complete",
+            api=api_name,
+            params=params,
+            pages=len(pages),
+            rows=sum(page.row_count for page in pages),
+            resumed=sum(page.resumed for page in pages),
+        )
     return pages
 
 
-def _reference(archiver: TushareBulkArchiver, start_date: str, end_date: str) -> tuple[str, ...]:
+def _reference(
+    archiver: TushareBulkArchiver, start_date: str, end_date: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
     stock_codes: set[str] = set()
+    trading_days: set[str] = set()
     for api_name, params in REFERENCE_JOBS:
         pages = _archive_pages(archiver, api_name, params, optional=api_name == "stock_company")
         if api_name == "stock_basic":
@@ -153,23 +158,67 @@ def _reference(archiver: TushareBulkArchiver, start_date: str, end_date: str) ->
                     str(row["ts_code"]) for row in archiver.read_items(page) if row.get("ts_code")
                 )
     for exchange in ("SSE", "SZSE"):
-        _archive_pages(
+        pages = _archive_pages(
             archiver,
             "trade_cal",
             {"exchange": exchange, "start_date": start_date, "end_date": end_date},
         )
+        for page in pages:
+            trading_days.update(
+                str(row["cal_date"])
+                for row in archiver.read_items(page)
+                if str(row.get("is_open")) == "1" and row.get("cal_date")
+            )
     for market in INDEX_MARKETS:
         _archive_pages(archiver, "index_basic", {"market": market}, optional=True)
-    return tuple(sorted(stock_codes))
+    if not trading_days:
+        raise RuntimeError("trading calendar contains no open sessions")
+    return tuple(sorted(stock_codes)), tuple(sorted(trading_days))
 
 
-def _market(archiver: TushareBulkArchiver, start_date: str, end_date: str) -> None:
+def _market(
+    archiver: TushareBulkArchiver,
+    start_date: str,
+    end_date: str,
+    trading_days: tuple[str, ...],
+) -> None:
+    """Use one request per session because compatible proxies may cap global offsets."""
     for api_name in MARKET_APIS:
-        _archive_pages(
-            archiver,
-            api_name,
-            {"start_date": start_date, "end_date": end_date},
-            optional=api_name in {"limit_list_d", "moneyflow"},
+        row_count = 0
+        page_count = 0
+        resumed_count = 0
+        selected_days = tuple(day for day in trading_days if start_date <= day <= end_date)
+        for number, trade_date in enumerate(selected_days, start=1):
+            pages = _archive_pages(
+                archiver,
+                api_name,
+                {"trade_date": trade_date},
+                optional=api_name in {"limit_list_d", "moneyflow"},
+                log_complete=False,
+            )
+            row_count += sum(page.row_count for page in pages)
+            page_count += len(pages)
+            resumed_count += sum(page.resumed for page in pages)
+            if number % 100 == 0:
+                _log(
+                    "market_progress",
+                    api=api_name,
+                    sessions=number,
+                    total_sessions=len(selected_days),
+                    rows=row_count,
+                    checkpoint=archiver.state.counts(),
+                )
+        _log(
+            "dataset_complete",
+            api=api_name,
+            params={
+                "start_date": start_date,
+                "end_date": end_date,
+                "partition": "trade_date",
+            },
+            pages=page_count,
+            rows=row_count,
+            resumed=resumed_count,
         )
 
 
@@ -373,12 +422,17 @@ def main() -> int:
             archiver.state.close()
             return 0
         stock_codes: tuple[str, ...] = ()
+        trading_days: tuple[str, ...] = ()
         try:
-            if "reference" in stages or "corporate" in stages:
-                stock_codes = _reference(archiver, args.start_date, args.end_date)
-                _log("reference_complete", stocks=len(stock_codes))
+            if "reference" in stages or "market" in stages or "corporate" in stages:
+                stock_codes, trading_days = _reference(archiver, args.start_date, args.end_date)
+                _log(
+                    "reference_complete",
+                    stocks=len(stock_codes),
+                    trading_days=len(trading_days),
+                )
             if "market" in stages:
-                _market(archiver, args.start_date, args.end_date)
+                _market(archiver, args.start_date, args.end_date, trading_days)
             if "financials" in stages:
                 _financials(archiver, args.start_date, args.end_date)
             if "indices" in stages:
