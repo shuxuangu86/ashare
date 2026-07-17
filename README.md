@@ -9,10 +9,11 @@ AQuant 是一套面向沪深 A 股日频/低频研究的本地量化系统。核
 - 实盘默认关闭，数据或状态异常时停止交易；
 - 相同代码、配置、数据和随机种子产生相同结果。
 
-当前状态：Day 1 至 Day 9 的代码与离线自动验收已完成。开发阶段默认使用 AKShare
-主源和 BaoStock 校验源，Tushare Adapter 保留但默认关闭。真实网络拉取、Docker 服务
-启动和 PostgreSQL migration 仍需在用户本机验收。进度见
-`docs/development/status.md`。
+当前状态：Day 1 至 Day 20 的本地 MVP 代码与离线自动验收已完成。系统包含可信数据、
+PIT 查询、因子研究、双路径回测、机器学习、组合约束、模拟券商、QMT 适配边界、执行
+门控、核对、Kill Switch、API、界面原型和运维手册。开发阶段默认使用 AKShare 主源和
+BaoStock 校验源；实盘始终默认关闭。真实数据、Docker 服务和 Windows QMT 联调仍需在
+目标电脑验收。详见 `docs/acceptance/final-report.md`。
 
 ## 环境要求
 
@@ -30,7 +31,9 @@ QMT / XtQuant 或 PTrade 只在后续 Windows 原生执行代理中安装。不�
 ```bash
 cd aquant
 cp .env.example .env
-uv sync --group dev --extra data --extra research --extra free-data
+uv sync --group dev \
+  --extra data --extra research --extra free-data \
+  --extra optimization --extra services --extra ui
 uv run aquant config-check \
   --config config/base.yaml \
   --config config/data.yaml \
@@ -63,6 +66,18 @@ make infra-up       # 构建并启动基础服务
 make quality        # Ruff + mypy + pytest + 覆盖率门槛
 ```
 
+其他入口：
+
+```bash
+uv run uvicorn aquant.api:create_app --factory --host 127.0.0.1 --port 8000
+uv run streamlit run apps/research_ui/app.py
+uv run streamlit run apps/operations_ui/app.py
+uv run python apps/execution_agent_windows/main.py
+```
+
+Windows 执行代理入口只验证安全配置，不会自行解锁 LIVE，也不会在未注入实际 QMT Gateway
+时提交订单。
+
 ## 安全边界
 
 - `config/base.yaml` 固定为 `BACKTEST`，且 `live_trading.enabled=false`。
@@ -81,6 +96,14 @@ make quality        # Ruff + mypy + pytest + 覆盖率门槛
 - 任何财务、成分股或公司行为查询都必须经过 PIT 接口。
 - 不允许绕过 `OrderIntent` 直接提交订单。
 - 数据目录中的运行数据不进入 Git；数据批次通过校验和与发布 ID 追踪。
+
+## 验收基线
+
+- 313 项离线测试通过；
+- 总覆盖率 94.82%；
+- Ruff、mypy strict 和 pre-commit 必须全部通过；
+- 合成市场覆盖停牌、涨跌停、费用、部分成交、幂等、乱序回调与故障闭锁；
+- 真实收益、真实数据供应商稳定性和真实券商连接不属于离线测试结论。
 
 ## 许可证
 

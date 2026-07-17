@@ -26,7 +26,7 @@ from aquant.backtest.matching import (
 )
 from aquant.domain.enums import Side
 from aquant.domain.identifiers import Symbol
-from aquant.domain.market_data import DailyBar
+from aquant.domain.market_data import DailyBar, SecurityStatus
 from aquant.domain.time import require_aware
 
 
@@ -36,6 +36,7 @@ class MarketSession:
     open_at: datetime
     close_at: datetime
     bars: tuple[DailyBar, ...]
+    statuses: tuple[SecurityStatus, ...] = ()
 
     def __post_init__(self) -> None:
         opened = require_aware(self.open_at, field_name="open_at")
@@ -47,11 +48,19 @@ class MarketSession:
             raise ValueError("market session bars must be non-empty with unique symbols")
         if any(bar.trade_date != self.trade_date for bar in self.bars):
             raise ValueError("market session bar date mismatch")
+        status_symbols = [status.symbol for status in self.statuses]
+        if len(status_symbols) != len(set(status_symbols)) or any(
+            status.trade_date != self.trade_date for status in self.statuses
+        ):
+            raise ValueError("market session security statuses are invalid")
         object.__setattr__(self, "open_at", opened)
         object.__setattr__(self, "close_at", closed)
 
     def bar_by_symbol(self) -> dict[Symbol, DailyBar]:
         return {bar.symbol: bar for bar in self.bars}
+
+    def status_by_symbol(self) -> dict[Symbol, SecurityStatus]:
+        return {status.symbol: status for status in self.statuses}
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,12 +86,33 @@ class BacktestResult:
 SessionEvent = SessionOpenEvent | SessionCloseEvent
 
 
+class OpenMatcher(Protocol):
+    def match(
+        self,
+        order: BacktestOrder,
+        bar: DailyBar,
+        *,
+        occurred_at: datetime,
+        fill_id: UUID,
+        maximum_quantity: int | None = None,
+        available_cash: Decimal | None = None,
+        status: SecurityStatus | None = None,
+    ) -> Fill | None: ...
+
+
 class EventDrivenBacktest:
-    def __init__(self, *, run_id: str, initial_cash: Decimal) -> None:
+    def __init__(
+        self,
+        *,
+        run_id: str,
+        initial_cash: Decimal,
+        matcher: OpenMatcher | None = None,
+    ) -> None:
         if not run_id.strip():
             raise ValueError("backtest run_id must not be blank")
         self._run_id = run_id.strip()
         self._initial_cash = Decimal(initial_cash)
+        self._matcher = matcher or NextOpenMatcher()
 
     def run(
         self,
@@ -106,7 +136,6 @@ class EventDrivenBacktest:
 
         order_book = OrderBook()
         ledger = PortfolioLedger(self._initial_cash)
-        matcher = NextOpenMatcher()
         events: list[BacktestEvent] = []
         equity_curve: list[PortfolioSnapshot] = []
         order_sequence = 0
@@ -119,18 +148,21 @@ class EventDrivenBacktest:
             events.append(event)
             if isinstance(event, SessionOpenEvent):
                 bars = session.bar_by_symbol()
+                statuses = session.status_by_symbol()
                 for order in order_book.eligible_orders(event.occurred_at):
                     bar = bars.get(order.symbol)
                     if bar is None:
                         continue
                     maximum = self._maximum_executable(order, bar.open, ledger)
                     fill_sequence += 1
-                    fill = matcher.match(
+                    fill = self._matcher.match(
                         order,
                         bar,
                         occurred_at=event.occurred_at,
                         fill_id=self._identifier("fill", fill_sequence),
                         maximum_quantity=maximum,
+                        available_cash=ledger.cash,
+                        status=statuses.get(order.symbol),
                     )
                     if fill is None:
                         continue

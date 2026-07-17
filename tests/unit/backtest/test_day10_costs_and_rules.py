@@ -1,0 +1,204 @@
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
+from uuid import UUID
+
+import pytest
+
+from aquant.backtest import (
+    AshareExecutionRules,
+    AshareFeeModel,
+    AshareOpenMatcher,
+    BacktestOrder,
+    EventDrivenBacktest,
+    MarketSession,
+    OrderRequest,
+    StrategyContext,
+    calculate_metrics,
+    render_markdown_report,
+)
+from aquant.domain.enums import Side
+from aquant.domain.identifiers import Symbol
+from aquant.domain.market_data import DailyBar, LimitStatus, SecurityStatus
+
+SYMBOL = Symbol.parse("600000.XSHG")
+SUBMITTED = datetime(2026, 7, 15, 7, tzinfo=UTC)
+OPENED = SUBMITTED + timedelta(days=1)
+
+
+def _order(side: Side = Side.BUY, quantity: int = 1000) -> BacktestOrder:
+    return BacktestOrder(UUID(int=1), SYMBOL, side, quantity, SUBMITTED)
+
+
+def _bar(volume: str = "10000") -> DailyBar:
+    return DailyBar(
+        SYMBOL,
+        date(2026, 7, 16),
+        Decimal("10"),
+        Decimal("10.5"),
+        Decimal("9.5"),
+        Decimal("10"),
+        Decimal(volume),
+        Decimal("100000"),
+    )
+
+
+def _status(**overrides: object) -> SecurityStatus:
+    values: dict[str, object] = {
+        "symbol": SYMBOL,
+        "trade_date": date(2026, 7, 16),
+        "suspended": False,
+        "is_st": False,
+        "limit_status": LimitStatus.NONE,
+    }
+    values.update(overrides)
+    return SecurityStatus(**values)  # type: ignore[arg-type]
+
+
+def test_fee_model_applies_minimum_commission_and_sell_tax() -> None:
+    model = AshareFeeModel()
+    buy = model.calculate(Side.BUY, Decimal("1000"))
+    sell = model.calculate(Side.SELL, Decimal("1000"))
+    assert buy.commission == Decimal("5")
+    assert buy.stamp_duty == 0
+    assert sell.stamp_duty == Decimal("0.5000")
+    assert sell.total > buy.total
+    with pytest.raises(ValueError, match="positive"):
+        model.calculate(Side.BUY, Decimal("0"))
+
+
+def test_rule_aware_matcher_applies_lot_volume_slippage_and_fees() -> None:
+    matcher = AshareOpenMatcher(
+        rules=AshareExecutionRules(
+            lot_size=100,
+            max_volume_participation=Decimal("0.05"),
+            slippage_bps=Decimal("10"),
+        )
+    )
+    fill = matcher.match(
+        _order(quantity=1000),
+        _bar(volume="9000"),
+        occurred_at=OPENED,
+        fill_id=UUID(int=2),
+        available_cash=Decimal("100000"),
+        status=_status(),
+    )
+    assert fill is not None
+    assert fill.quantity == 400
+    assert fill.price == Decimal("10.010")
+    assert fill.fee > 0
+
+
+@pytest.mark.parametrize(
+    ("side", "status"),
+    [
+        (Side.BUY, _status(suspended=True)),
+        (Side.BUY, _status(limit_status=LimitStatus.LIMIT_UP)),
+        (Side.SELL, _status(limit_status=LimitStatus.LIMIT_DOWN)),
+    ],
+)
+def test_suspension_and_directional_limits_block_fills(side: Side, status: SecurityStatus) -> None:
+    fill = AshareOpenMatcher().match(
+        _order(side),
+        _bar(),
+        occurred_at=OPENED,
+        fill_id=UUID(int=3),
+        available_cash=Decimal("100000"),
+        status=status,
+    )
+    assert fill is None
+
+
+def test_missing_status_fails_closed_and_cash_includes_fees() -> None:
+    matcher = AshareOpenMatcher()
+    assert (
+        matcher.match(
+            _order(),
+            _bar(),
+            occurred_at=OPENED,
+            fill_id=UUID(int=4),
+            available_cash=Decimal("100000"),
+        )
+        is None
+    )
+    fill = matcher.match(
+        _order(quantity=200),
+        _bar(),
+        occurred_at=OPENED,
+        fill_id=UUID(int=5),
+        available_cash=Decimal("1005"),
+        status=_status(),
+    )
+    assert fill is None
+
+
+def test_rule_configuration_rejects_unsafe_values() -> None:
+    with pytest.raises(ValueError):
+        AshareExecutionRules(lot_size=0)
+    with pytest.raises(ValueError):
+        AshareExecutionRules(max_volume_participation=Decimal("1.1"))
+    with pytest.raises(ValueError):
+        AshareExecutionRules(slippage_bps=Decimal("-1"))
+    with pytest.raises(ValueError):
+        AshareFeeModel(commission_rate=Decimal("-1"))
+
+
+class BuyOnce:
+    def on_close(self, context: StrategyContext) -> tuple[OrderRequest, ...]:
+        return (
+            (OrderRequest(SYMBOL, Side.BUY, 100),)
+            if context.session.trade_date == date(2026, 7, 15)
+            else ()
+        )
+
+
+def _session(day: int, *, with_status: bool) -> MarketSession:
+    trade_date = date(2026, 7, day)
+    bar = DailyBar(
+        SYMBOL,
+        trade_date,
+        Decimal("10"),
+        Decimal("10"),
+        Decimal("10"),
+        Decimal("10"),
+        Decimal("10000"),
+        Decimal("100000"),
+    )
+    statuses = (
+        (SecurityStatus(SYMBOL, trade_date, False, False, LimitStatus.NONE),) if with_status else ()
+    )
+    return MarketSession(
+        trade_date,
+        datetime(2026, 7, day, 1, 30, tzinfo=UTC),
+        datetime(2026, 7, day, 7, tzinfo=UTC),
+        (bar,),
+        statuses,
+    )
+
+
+def test_rule_aware_matcher_integrates_with_engine_and_report() -> None:
+    matcher = AshareOpenMatcher(rules=AshareExecutionRules(slippage_bps=Decimal("0")))
+    result = EventDrivenBacktest(
+        run_id="day10-costs",
+        initial_cash=Decimal("2000"),
+        matcher=matcher,
+    ).run((_session(15, with_status=True), _session(16, with_status=True)), BuyOnce())
+
+    assert len(result.fills) == 1 and result.fills[0].fee == Decimal("5.01000")
+    assert result.equity_curve[-1].equity == Decimal("1994.99000")
+    metrics = calculate_metrics(result, initial_equity=Decimal("2000"))
+    assert metrics.total_fees == Decimal("5.01000")
+    assert metrics.fill_rate == Decimal("1")
+    assert metrics.total_return < 0
+    report = render_markdown_report(result, initial_equity=Decimal("2000"))
+    assert "Backtest Report: day10-costs" in report
+    assert "Total fees: 5.01000" in report
+
+
+def test_rule_aware_engine_fails_closed_without_status() -> None:
+    result = EventDrivenBacktest(
+        run_id="day10-no-status",
+        initial_cash=Decimal("2000"),
+        matcher=AshareOpenMatcher(),
+    ).run((_session(15, with_status=False), _session(16, with_status=False)), BuyOnce())
+    assert result.fills == ()
+    assert result.orders[0].filled_quantity == 0

@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from aquant.backtest.matching.orders import BacktestOrder, Fill
-from aquant.domain.market_data import DailyBar
+from aquant.domain.market_data import DailyBar, SecurityStatus
 from aquant.domain.time import require_aware
 
 
@@ -18,7 +18,10 @@ class NextOpenMatcher:
         occurred_at: datetime,
         fill_id: UUID,
         maximum_quantity: int | None = None,
+        available_cash: Decimal | None = None,
+        status: SecurityStatus | None = None,
     ) -> Fill | None:
+        del available_cash, status
         timestamp = require_aware(occurred_at, field_name="occurred_at")
         if bar.symbol != order.symbol:
             raise ValueError("matching bar symbol does not match order")

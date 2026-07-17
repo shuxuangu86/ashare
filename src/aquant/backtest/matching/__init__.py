@@ -1,3 +1,4 @@
+from aquant.backtest.matching.ashare import AshareExecutionRules, AshareOpenMatcher
 from aquant.backtest.matching.next_open import NextOpenMatcher
 from aquant.backtest.matching.orders import (
     BacktestOrder,
@@ -10,6 +11,8 @@ from aquant.backtest.matching.orders import (
 )
 
 __all__ = [
+    "AshareExecutionRules",
+    "AshareOpenMatcher",
     "BacktestOrder",
     "BacktestOrderStatus",
     "Fill",
