@@ -1,0 +1,20 @@
+{
+  "equity_curve": ["10000", "10100", "10200"],
+  "event_kinds": [
+    "SESSION_OPEN",
+    "SESSION_CLOSE",
+    "ORDER_SUBMITTED",
+    "SESSION_OPEN",
+    "FILL",
+    "SESSION_CLOSE",
+    "ORDER_SUBMITTED",
+    "SESSION_OPEN",
+    "FILL",
+    "SESSION_CLOSE"
+  ],
+  "fills": [
+    {"price": "11", "quantity": 100, "side": "BUY"},
+    {"price": "13", "quantity": 100, "side": "SELL"}
+  ],
+  "final_state_hash": "cfaec355d00775a3faa0974f079265283001d05c7588102295eb1b6c90565a79"
+}
