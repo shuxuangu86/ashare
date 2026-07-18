@@ -96,8 +96,22 @@ def test_market_partitions_requests_by_trade_date_not_global_offset(
         "20260102",
         "20260105",
         ("20260101", "20260102", "20260105", "20260106"),
+        3,
     )
 
     assert len(calls) == len(tushare_backfill.MARKET_APIS) * 2
     assert {tuple(params) for _, params in calls} == {("trade_date",)}
     assert {params["trade_date"] for _, params in calls} == {"20260102", "20260105"}
+
+
+def test_progress_checkpoint_contains_finish_time_and_eta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tushare_backfill.time, "monotonic", lambda: 120.0)
+
+    timing = tushare_backfill._progress_timing(started_at=60.0, completed=100, total=200)
+
+    assert timing["elapsed_minutes"] == 1.0
+    assert timing["sessions_per_minute"] == 100.0
+    assert "checkpoint_finished_at" in timing
+    assert "estimated_api_finish_at" in timing

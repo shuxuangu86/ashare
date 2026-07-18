@@ -3,7 +3,9 @@ import fcntl
 import json
 import os
 import shutil
+import time
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -81,7 +83,32 @@ WEIGHTED_BENCHMARKS = ("000016.SH", "000300.SH", "000905.SH", "000852.SH")
 
 
 def _log(event: str, **payload: object) -> None:
-    print(json.dumps({"event": event, **payload}, ensure_ascii=False), flush=True)
+    print(
+        json.dumps(
+            {
+                "event": event,
+                "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+                **payload,
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+
+
+def _progress_timing(*, started_at: float, completed: int, total: int) -> dict[str, object]:
+    now = datetime.now().astimezone()
+    elapsed_seconds = max(time.monotonic() - started_at, 0.001)
+    sessions_per_minute = completed / elapsed_seconds * 60
+    remaining_seconds = (total - completed) / sessions_per_minute * 60 if sessions_per_minute else 0
+    return {
+        "checkpoint_finished_at": now.isoformat(timespec="seconds"),
+        "elapsed_minutes": round(elapsed_seconds / 60, 2),
+        "sessions_per_minute": round(sessions_per_minute, 2),
+        "estimated_api_finish_at": (now + timedelta(seconds=remaining_seconds)).isoformat(
+            timespec="seconds"
+        ),
+    }
 
 
 def _quarter_ends(start_date: str, end_date: str) -> tuple[str, ...]:
@@ -181,6 +208,7 @@ def _market(
     start_date: str,
     end_date: str,
     trading_days: tuple[str, ...],
+    workers: int,
 ) -> None:
     """Use one request per session because compatible proxies may cap global offsets."""
     for api_name in MARKET_APIS:
@@ -188,26 +216,39 @@ def _market(
         page_count = 0
         resumed_count = 0
         selected_days = tuple(day for day in trading_days if start_date <= day <= end_date)
-        for number, trade_date in enumerate(selected_days, start=1):
-            pages = _archive_pages(
+        started_at = time.monotonic()
+
+        def download_session(trade_date: str, current_api: str = api_name) -> list[ArchivedPage]:
+            return _archive_pages(
                 archiver,
-                api_name,
+                current_api,
                 {"trade_date": trade_date},
-                optional=api_name in {"limit_list_d", "moneyflow"},
+                optional=current_api in {"limit_list_d", "moneyflow"},
                 log_complete=False,
             )
-            row_count += sum(page.row_count for page in pages)
-            page_count += len(pages)
-            resumed_count += sum(page.resumed for page in pages)
-            if number % 100 == 0:
-                _log(
-                    "market_progress",
-                    api=api_name,
-                    sessions=number,
-                    total_sessions=len(selected_days),
-                    rows=row_count,
-                    checkpoint=archiver.state.counts(),
-                )
+
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="tushare") as executor:
+            futures = [executor.submit(download_session, day) for day in selected_days]
+            for number, future in enumerate(as_completed(futures), start=1):
+                pages = future.result()
+                row_count += sum(page.row_count for page in pages)
+                page_count += len(pages)
+                resumed_count += sum(page.resumed for page in pages)
+                if number % 100 == 0 or number == len(selected_days):
+                    _log(
+                        "market_progress",
+                        api=api_name,
+                        sessions=number,
+                        total_sessions=len(selected_days),
+                        rows=row_count,
+                        workers=workers,
+                        checkpoint=archiver.state.counts(),
+                        **_progress_timing(
+                            started_at=started_at,
+                            completed=number,
+                            total=len(selected_days),
+                        ),
+                    )
         _log(
             "dataset_complete",
             api=api_name,
@@ -219,6 +260,12 @@ def _market(
             pages=page_count,
             rows=row_count,
             resumed=resumed_count,
+            workers=workers,
+            **_progress_timing(
+                started_at=started_at,
+                completed=len(selected_days),
+                total=len(selected_days),
+            ),
         )
 
 
@@ -233,12 +280,39 @@ def _financials(archiver: TushareBulkArchiver, start_date: str, end_date: str) -
             )
 
 
-def _corporate_actions(archiver: TushareBulkArchiver, stock_codes: Iterable[str]) -> None:
-    for number, ts_code in enumerate(stock_codes, start=1):
+def _corporate_actions(
+    archiver: TushareBulkArchiver, stock_codes: Iterable[str], workers: int
+) -> None:
+    selected_codes = tuple(stock_codes)
+    started_at = time.monotonic()
+
+    def download_stock(ts_code: str) -> None:
         for api_name in ("dividend", "share_float"):
-            _archive_pages(archiver, api_name, {"ts_code": ts_code}, optional=True)
-        if number % 100 == 0:
-            _log("corporate_progress", stocks=number, checkpoint=archiver.state.counts())
+            _archive_pages(
+                archiver,
+                api_name,
+                {"ts_code": ts_code},
+                optional=True,
+                log_complete=False,
+            )
+
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="tushare") as executor:
+        futures = [executor.submit(download_stock, code) for code in selected_codes]
+        for number, future in enumerate(as_completed(futures), start=1):
+            future.result()
+            if number % 100 == 0 or number == len(selected_codes):
+                _log(
+                    "corporate_progress",
+                    stocks=number,
+                    total_stocks=len(selected_codes),
+                    workers=workers,
+                    checkpoint=archiver.state.counts(),
+                    **_progress_timing(
+                        started_at=started_at,
+                        completed=number,
+                        total=len(selected_codes),
+                    ),
+                )
 
 
 def _indices(archiver: TushareBulkArchiver, start_date: str, end_date: str) -> None:
@@ -300,6 +374,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--timeout", type=float, default=45)
     parser.add_argument("--interval", type=float, default=0.15)
+    parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--max-attempts", type=int, default=8)
     parser.add_argument("--min-free-gb", type=float, default=20)
     parser.add_argument("--status-only", action="store_true")
@@ -381,6 +456,8 @@ def main() -> int:
     _validate_date(args.end_date, field_name="end-date")
     if args.start_date > args.end_date:
         raise SystemExit("start-date cannot be after end-date")
+    if not 1 <= args.workers <= 16:
+        raise SystemExit("workers must be between 1 and 16")
     stages = tuple(stage.strip() for stage in args.stages.split(",") if stage.strip())
     unknown = set(stages) - {
         "reference",
@@ -416,6 +493,7 @@ def main() -> int:
             start=args.start_date,
             end=args.end_date,
             disk=disk,
+            workers=args.workers,
         )
         if args.status_only:
             _log("backfill_status", checkpoint=archiver.state.counts(), report=str(report_path))
@@ -432,7 +510,13 @@ def main() -> int:
                     trading_days=len(trading_days),
                 )
             if "market" in stages:
-                _market(archiver, args.start_date, args.end_date, trading_days)
+                _market(
+                    archiver,
+                    args.start_date,
+                    args.end_date,
+                    trading_days,
+                    args.workers,
+                )
             if "financials" in stages:
                 _financials(archiver, args.start_date, args.end_date)
             if "indices" in stages:
@@ -440,7 +524,7 @@ def main() -> int:
             if "industries" in stages:
                 _industries(archiver)
             if "corporate" in stages:
-                _corporate_actions(archiver, stock_codes)
+                _corporate_actions(archiver, stock_codes, args.workers)
             checkpoint = archiver.state.counts()
             _write_report(
                 report_path,

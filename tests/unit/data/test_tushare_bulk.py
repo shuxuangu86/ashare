@@ -1,4 +1,7 @@
+import http.client
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
@@ -24,10 +27,12 @@ class SequenceTransport:
     def __init__(self, responses: list[HttpResponse | Exception]) -> None:
         self.responses = responses
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self._lock = threading.Lock()
 
     def post_json(self, url: str, payload: dict[str, Any], *, timeout: float) -> HttpResponse:
-        self.calls.append((url, payload))
-        response = self.responses.pop(0)
+        with self._lock:
+            self.calls.append((url, payload))
+            response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
         return response
@@ -78,11 +83,19 @@ def test_pagination_uses_stable_offsets_until_short_page(tmp_path: Path) -> None
     archiver.state.close()
 
 
+@pytest.mark.parametrize(
+    "failure",
+    [
+        URLError("temporary"),
+        http.client.IncompleteRead(b"partial response", 100),
+        http.client.RemoteDisconnected("remote closed connection"),
+    ],
+)
 def test_retryable_transport_failure_is_checkpointed_then_retried(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception
 ) -> None:
     monkeypatch.setattr("aquant.data.ingestion.tushare_bulk.time.sleep", lambda _: None)
-    transport = SequenceTransport([URLError("temporary"), _response([])])
+    transport = SequenceTransport([failure, _response([])])
     archiver = _archiver(tmp_path, transport)
 
     page = archiver.archive_page("trade_cal", {})
@@ -132,4 +145,25 @@ def test_page_size_guard_rejects_values_above_provider_limit(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="between 1 and 6000"):
         list(archiver.archive_paginated("daily", {}, page_size=6001))
+    archiver.state.close()
+
+
+def test_checkpoint_store_supports_concurrent_unique_pages(tmp_path: Path) -> None:
+    page_count = 24
+    transport = SequenceTransport(
+        [_response([[f"S{number}", number]]) for number in range(page_count)]
+    )
+    archiver = _archiver(tmp_path, transport)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        pages = list(
+            executor.map(
+                lambda number: archiver.archive_page("daily", {"trade_date": f"D{number}"}),
+                range(page_count),
+            )
+        )
+
+    assert len(pages) == page_count
+    assert archiver.state.counts() == {"COMPLETED": page_count}
+    assert len(list((tmp_path / "raw").rglob("response.json"))) == page_count
     archiver.state.close()

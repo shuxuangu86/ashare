@@ -1,6 +1,8 @@
 import hashlib
+import http.client
 import json
 import sqlite3
+import threading
 import time
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
@@ -41,34 +43,39 @@ class BackfillState:
 
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._connection = sqlite3.connect(path)
-        self._connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS pages (
-                job_key TEXT PRIMARY KEY,
-                api_name TEXT NOT NULL,
-                params_json TEXT NOT NULL,
-                status TEXT NOT NULL,
-                attempts INTEGER NOT NULL,
-                row_count INTEGER,
-                fields_json TEXT,
-                payload_path TEXT,
-                manifest_path TEXT,
-                error TEXT,
-                updated_at TEXT NOT NULL
+        self._lock = threading.RLock()
+        self._connection = sqlite3.connect(path, timeout=30, check_same_thread=False)
+        with self._lock:
+            self._connection.execute("PRAGMA journal_mode=WAL")
+            self._connection.execute("PRAGMA busy_timeout=30000")
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pages (
+                    job_key TEXT PRIMARY KEY,
+                    api_name TEXT NOT NULL,
+                    params_json TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL,
+                    row_count INTEGER,
+                    fields_json TEXT,
+                    payload_path TEXT,
+                    manifest_path TEXT,
+                    error TEXT,
+                    updated_at TEXT NOT NULL
+                )
+                """
             )
-            """
-        )
-        self._connection.commit()
+            self._connection.commit()
 
     def completed(self, job_key: str) -> ArchivedPage | None:
-        row = self._connection.execute(
-            """
-            SELECT api_name, params_json, row_count, fields_json, payload_path, manifest_path
-            FROM pages WHERE job_key = ? AND status = 'COMPLETED'
-            """,
-            (job_key,),
-        ).fetchone()
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT api_name, params_json, row_count, fields_json, payload_path, manifest_path
+                FROM pages WHERE job_key = ? AND status = 'COMPLETED'
+                """,
+                (job_key,),
+            ).fetchone()
         if row is None:
             return None
         payload_path = Path(row[4])
@@ -87,55 +94,60 @@ class BackfillState:
 
     def record_attempt(self, job_key: str, api_name: str, params_json: str) -> None:
         now = datetime.now(UTC).isoformat()
-        self._connection.execute(
-            """
-            INSERT INTO pages(job_key, api_name, params_json, status, attempts, updated_at)
-            VALUES (?, ?, ?, 'RUNNING', 1, ?)
-            ON CONFLICT(job_key) DO UPDATE SET
-                status = 'RUNNING', attempts = pages.attempts + 1,
-                error = NULL, updated_at = excluded.updated_at
-            """,
-            (job_key, api_name, params_json, now),
-        )
-        self._connection.commit()
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO pages(job_key, api_name, params_json, status, attempts, updated_at)
+                VALUES (?, ?, ?, 'RUNNING', 1, ?)
+                ON CONFLICT(job_key) DO UPDATE SET
+                    status = 'RUNNING', attempts = pages.attempts + 1,
+                    error = NULL, updated_at = excluded.updated_at
+                """,
+                (job_key, api_name, params_json, now),
+            )
+            self._connection.commit()
 
     def record_success(self, job_key: str, page: ArchivedPage) -> None:
-        self._connection.execute(
-            """
-            UPDATE pages SET status = 'COMPLETED', row_count = ?, fields_json = ?,
-                payload_path = ?, manifest_path = ?, error = NULL, updated_at = ?
-            WHERE job_key = ?
-            """,
-            (
-                page.row_count,
-                json.dumps(page.fields, ensure_ascii=False),
-                str(page.payload_path.resolve()),
-                str(page.manifest_path.resolve()),
-                datetime.now(UTC).isoformat(),
-                job_key,
-            ),
-        )
-        self._connection.commit()
+        with self._lock:
+            self._connection.execute(
+                """
+                UPDATE pages SET status = 'COMPLETED', row_count = ?, fields_json = ?,
+                    payload_path = ?, manifest_path = ?, error = NULL, updated_at = ?
+                WHERE job_key = ?
+                """,
+                (
+                    page.row_count,
+                    json.dumps(page.fields, ensure_ascii=False),
+                    str(page.payload_path.resolve()),
+                    str(page.manifest_path.resolve()),
+                    datetime.now(UTC).isoformat(),
+                    job_key,
+                ),
+            )
+            self._connection.commit()
 
     def record_failure(self, job_key: str, error: str) -> None:
-        self._connection.execute(
-            """
-            UPDATE pages SET status = 'FAILED', error = ?, updated_at = ? WHERE job_key = ?
-            """,
-            (error[:2000], datetime.now(UTC).isoformat(), job_key),
-        )
-        self._connection.commit()
+        with self._lock:
+            self._connection.execute(
+                """
+                UPDATE pages SET status = 'FAILED', error = ?, updated_at = ? WHERE job_key = ?
+                """,
+                (error[:2000], datetime.now(UTC).isoformat(), job_key),
+            )
+            self._connection.commit()
 
     def counts(self) -> dict[str, int]:
-        return {
-            status: count
-            for status, count in self._connection.execute(
-                "SELECT status, count(*) FROM pages GROUP BY status"
-            )
-        }
+        with self._lock:
+            return {
+                status: count
+                for status, count in self._connection.execute(
+                    "SELECT status, count(*) FROM pages GROUP BY status"
+                )
+            }
 
     def close(self) -> None:
-        self._connection.close()
+        with self._lock:
+            self._connection.close()
 
 
 class TushareBulkArchiver:
@@ -166,6 +178,7 @@ class TushareBulkArchiver:
         self._max_attempts = max_attempts
         self._transport = transport or UrllibHttpTransport()
         self._last_request_at = 0.0
+        self._throttle_lock = threading.Lock()
 
     @staticmethod
     def _canonical_params(params: Mapping[str, Any]) -> str:
@@ -197,7 +210,14 @@ class TushareBulkArchiver:
                 page = self._request_and_archive(api_name, dict(params), fields)
                 self.state.record_success(key, page)
                 return page
-            except (HTTPError, URLError, TimeoutError, TushareApiError, OSError) as exc:
+            except (
+                HTTPError,
+                URLError,
+                TimeoutError,
+                TushareApiError,
+                http.client.HTTPException,
+                OSError,
+            ) as exc:
                 last_error = exc
                 self.state.record_failure(key, f"{type(exc).__name__}: {exc}")
                 if isinstance(exc, TushareApiError) and not exc.retryable:
@@ -251,10 +271,11 @@ class TushareBulkArchiver:
         return hashlib.sha256(body).hexdigest()
 
     def _throttle(self) -> None:
-        elapsed = time.monotonic() - self._last_request_at
-        if elapsed < self._minimum_interval:
-            time.sleep(self._minimum_interval - elapsed)
-        self._last_request_at = time.monotonic()
+        with self._throttle_lock:
+            elapsed = time.monotonic() - self._last_request_at
+            if elapsed < self._minimum_interval:
+                time.sleep(self._minimum_interval - elapsed)
+            self._last_request_at = time.monotonic()
 
     def _request_and_archive(
         self, api_name: str, params: dict[str, Any], fields: str
