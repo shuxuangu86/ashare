@@ -106,6 +106,27 @@ def test_retryable_transport_failure_is_checkpointed_then_retried(
     archiver.state.close()
 
 
+def test_rate_limit_response_uses_long_backoff_then_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr("aquant.data.ingestion.tushare_bulk.time.sleep", sleeps.append)
+    transport = SequenceTransport(
+        [
+            _response([], code=429, msg="request rate too high"),
+            _response([]),
+        ]
+    )
+    archiver = _archiver(tmp_path, transport)
+
+    page = archiver.archive_page("suspend_d", {"trade_date": "20260718"})
+
+    assert page.row_count == 0
+    assert sleeps == [15.0]
+    assert archiver.state.counts() == {"COMPLETED": 1}
+    archiver.state.close()
+
+
 def test_nonretryable_api_error_is_archived_but_not_marked_complete(tmp_path: Path) -> None:
     transport = SequenceTransport([_response([], code=-2001, msg="permission denied")])
     archiver = _archiver(tmp_path, transport)

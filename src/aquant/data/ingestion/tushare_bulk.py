@@ -24,7 +24,7 @@ class TushareApiError(RuntimeError):
 
     @property
     def retryable(self) -> bool:
-        return self.code in {None, -1, -2, 500, 502, 503, 504}
+        return self.code in {None, -1, -2, 429, 500, 502, 503, 504}
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,7 +223,12 @@ class TushareBulkArchiver:
                 if isinstance(exc, TushareApiError) and not exc.retryable:
                     raise
                 if attempt < self._max_attempts:
-                    time.sleep(min(90.0, 2.0 ** (attempt - 1)))
+                    delay = (
+                        min(120.0, 15.0 * attempt)
+                        if isinstance(exc, TushareApiError) and exc.code == 429
+                        else min(90.0, 2.0 ** (attempt - 1))
+                    )
+                    time.sleep(delay)
         assert last_error is not None
         raise RuntimeError(
             f"Tushare page failed after {self._max_attempts} attempts: {api_name}"
