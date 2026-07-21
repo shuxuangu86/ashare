@@ -111,18 +111,6 @@ def _progress_timing(*, started_at: float, completed: int, total: int) -> dict[s
     }
 
 
-def _quarter_ends(start_date: str, end_date: str) -> tuple[str, ...]:
-    start_year = int(start_date[:4])
-    end_year = int(end_date[:4])
-    values = []
-    for year in range(start_year, end_year + 1):
-        for suffix in ("0331", "0630", "0930", "1231"):
-            value = f"{year}{suffix}"
-            if start_date <= value <= end_date:
-                values.append(value)
-    return tuple(values)
-
-
 def _months(start_date: str, end_date: str) -> tuple[tuple[str, str], ...]:
     start_year, start_month = int(start_date[:4]), int(start_date[4:6])
     end_year, end_month = int(end_date[:4]), int(end_date[4:6])
@@ -269,15 +257,73 @@ def _market(
         )
 
 
-def _financials(archiver: TushareBulkArchiver, start_date: str, end_date: str) -> None:
-    for period in _quarter_ends(start_date, end_date):
-        for api_name in FINANCIAL_APIS:
-            _archive_pages(
+def _financials(
+    archiver: TushareBulkArchiver,
+    stock_codes: Iterable[str],
+    workers: int,
+) -> None:
+    """Archive complete statement history per stock.
+
+    Tushare-compatible proxies may require ``ts_code`` for financial endpoints and
+    reject cross-sectional requests containing only ``period``.  A listed company
+    has far fewer rows than the API page limits, so stock partitioning is both
+    complete and substantially cheaper than stock-by-quarter partitioning.
+    """
+    selected_codes = tuple(stock_codes)
+    if not selected_codes:
+        raise RuntimeError("financial backfill requires at least one stock code")
+
+    for api_name in FINANCIAL_APIS:
+        row_count = 0
+        page_count = 0
+        resumed_count = 0
+        started_at = time.monotonic()
+
+        def download_stock(ts_code: str, current_api: str = api_name) -> list[ArchivedPage]:
+            return _archive_pages(
                 archiver,
-                api_name,
-                {"period" if api_name != "disclosure_date" else "end_date": period},
-                optional=api_name in {"forecast", "express", "disclosure_date"},
+                current_api,
+                {"ts_code": ts_code},
+                optional=current_api in {"forecast", "express", "disclosure_date"},
+                log_complete=False,
             )
+
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="tushare") as executor:
+            futures = [executor.submit(download_stock, code) for code in selected_codes]
+            for number, future in enumerate(as_completed(futures), start=1):
+                pages = future.result()
+                row_count += sum(page.row_count for page in pages)
+                page_count += len(pages)
+                resumed_count += sum(page.resumed for page in pages)
+                if number % 100 == 0 or number == len(selected_codes):
+                    _log(
+                        "financial_progress",
+                        api=api_name,
+                        stocks=number,
+                        total_stocks=len(selected_codes),
+                        rows=row_count,
+                        workers=workers,
+                        checkpoint=archiver.state.counts(),
+                        **_progress_timing(
+                            started_at=started_at,
+                            completed=number,
+                            total=len(selected_codes),
+                        ),
+                    )
+        _log(
+            "dataset_complete",
+            api=api_name,
+            params={"partition": "ts_code", "history": "complete"},
+            pages=page_count,
+            rows=row_count,
+            resumed=resumed_count,
+            workers=workers,
+            **_progress_timing(
+                started_at=started_at,
+                completed=len(selected_codes),
+                total=len(selected_codes),
+            ),
+        )
 
 
 def _corporate_actions(
@@ -502,7 +548,12 @@ def main() -> int:
         stock_codes: tuple[str, ...] = ()
         trading_days: tuple[str, ...] = ()
         try:
-            if "reference" in stages or "market" in stages or "corporate" in stages:
+            if (
+                "reference" in stages
+                or "market" in stages
+                or "financials" in stages
+                or "corporate" in stages
+            ):
                 stock_codes, trading_days = _reference(archiver, args.start_date, args.end_date)
                 _log(
                     "reference_complete",
@@ -518,7 +569,7 @@ def main() -> int:
                     args.workers,
                 )
             if "financials" in stages:
-                _financials(archiver, args.start_date, args.end_date)
+                _financials(archiver, stock_codes, args.workers)
             if "indices" in stages:
                 _indices(archiver, args.start_date, args.end_date)
             if "industries" in stages:
