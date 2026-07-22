@@ -1,3 +1,3 @@
-from aquant.config.settings import AppSettings, load_settings
+from aquant.config.settings import AppSettings, DiscretionaryStrategySettings, load_settings
 
-__all__ = ["AppSettings", "load_settings"]
+__all__ = ["AppSettings", "DiscretionaryStrategySettings", "load_settings"]

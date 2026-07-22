@@ -2,13 +2,14 @@ from collections.abc import Callable
 
 from fastapi import FastAPI
 
+from aquant import __version__
 from aquant.monitoring import LiveReadiness
 
 
 def create_app(
     readiness_provider: Callable[[], LiveReadiness] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="AQuant API", version="0.1.0", docs_url="/docs")
+    app = FastAPI(title="AQuant API", version=__version__, docs_url="/docs")
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -25,6 +26,6 @@ def create_app(
 
     @app.get("/version")
     def version() -> dict[str, str]:
-        return {"version": "0.1.0", "live_default": "disabled"}
+        return {"version": __version__, "live_default": "disabled"}
 
     return app

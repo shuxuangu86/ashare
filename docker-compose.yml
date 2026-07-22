@@ -19,6 +19,7 @@ services:
       - ./infra/postgres/init/001_databases.sql:/docker-entrypoint-initdb.d/001_databases.sql:ro
       - ./infra/postgres/migrations/001_reference_and_ingestion.sql:/docker-entrypoint-initdb.d/002_reference_and_ingestion.sql:ro
       - ./infra/postgres/migrations/002_research_and_execution.sql:/docker-entrypoint-initdb.d/003_research_and_execution.sql:ro
+      - ./infra/postgres/migrations/003_discretionary_strategy.sql:/docker-entrypoint-initdb.d/004_discretionary_strategy.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d aquant"]
       interval: 5s

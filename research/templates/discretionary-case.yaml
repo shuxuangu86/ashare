@@ -1,0 +1,138 @@
+case_id: example-company-20260722
+symbol: 000001.XSHE
+title: 待替换的研究案标题
+market_question: 市场当前给核心基本面假设定价了多大概率？
+
+radar_signal:
+  signal_type: residual_relative_strength
+  description: 价格异常只触发研究，不构成买入理由
+  model_version: radar-v1
+  observed_at: 2026-07-22T15:00:00+08:00
+  available_at: 2026-07-22T15:05:00+08:00
+  data_release_id: cn_equity_20260722_001
+
+hypotheses:
+  - id: fundamental-change
+    kind: FUNDAMENTAL
+    prior_probability: 0.40
+    statement: 待填写真实经营变化
+    falsification_conditions: [待填写]
+  - id: flow-technical
+    kind: FLOW_TECHNICAL
+    prior_probability: 0.35
+    statement: 待填写资金或交易结构解释
+    falsification_conditions: [待填写]
+  - id: noise
+    kind: NOISE
+    prior_probability: 0.25
+    statement: 待填写噪声解释
+    falsification_conditions: [待填写]
+
+key_variables:
+  - id: demand
+    name: 下游需求
+    thesis: 待填写
+    falsification_conditions: [待填写]
+    leading_indicators:
+      - id: demand-indicator-a
+        name: 需求指标 A
+        definition: 固定口径定义
+        method_version: v1
+        source_clusters: [customer-primary, supplier-cross-check]
+        expected_lead_days: 60
+      - id: demand-indicator-b
+        name: 需求指标 B
+        definition: 固定口径定义
+        method_version: v1
+        source_clusters: [channel-panel, competitor-cross-check]
+        expected_lead_days: 60
+  - id: share
+    name: 市场份额
+    thesis: 待填写
+    falsification_conditions: [待填写]
+    leading_indicators:
+      - id: share-indicator-a
+        name: 份额指标 A
+        definition: 固定口径定义
+        method_version: v1
+        source_clusters: [customer-qualification, competitor-disclosure]
+        expected_lead_days: 90
+      - id: share-indicator-b
+        name: 份额指标 B
+        definition: 固定口径定义
+        method_version: v1
+        source_clusters: [shipment-panel, supplier-cross-check]
+        expected_lead_days: 90
+  - id: margin-cash
+    name: 利润率与现金流
+    thesis: 待填写
+    falsification_conditions: [待填写]
+    leading_indicators:
+      - id: profit-indicator-a
+        name: 盈利指标 A
+        definition: 固定口径定义
+        method_version: v1
+        source_clusters: [product-mix, input-cost]
+        expected_lead_days: 60
+      - id: profit-indicator-b
+        name: 现金流指标 B
+        definition: 固定口径定义
+        method_version: v1
+        source_clusters: [payment-terms, financial-disclosure]
+        expected_lead_days: 90
+
+causal_chain:
+  - stage: INDUSTRY_CHANGE
+    claim: 待填写
+    known_facts: [待填写]
+    unknowns: [待填写]
+    indicator_ids: [demand-indicator-a]
+    next_validation_at: 2026-08-22T15:00:00+08:00
+    falsification_condition: 待填写
+  - stage: CUSTOMER_BEHAVIOR
+    claim: 待填写
+    known_facts: [待填写]
+    unknowns: [待填写]
+    indicator_ids: [demand-indicator-b]
+    next_validation_at: 2026-08-22T15:00:00+08:00
+    falsification_condition: 待填写
+  - stage: COMPANY_ORDERS
+    claim: 待填写
+    known_facts: [待填写]
+    unknowns: [待填写]
+    indicator_ids: [share-indicator-a]
+    next_validation_at: 2026-08-22T15:00:00+08:00
+    falsification_condition: 待填写
+  - stage: REVENUE
+    claim: 待填写
+    known_facts: [待填写]
+    unknowns: [待填写]
+    indicator_ids: [share-indicator-b]
+    next_validation_at: 2026-10-31T15:00:00+08:00
+    falsification_condition: 待填写
+  - stage: MARGIN
+    claim: 待填写
+    known_facts: [待填写]
+    unknowns: [待填写]
+    indicator_ids: [profit-indicator-a]
+    next_validation_at: 2026-10-31T15:00:00+08:00
+    falsification_condition: 待填写
+  - stage: CASH_FLOW
+    claim: 待填写
+    known_facts: [待填写]
+    unknowns: [待填写]
+    indicator_ids: [profit-indicator-b]
+    next_validation_at: 2026-10-31T15:00:00+08:00
+    falsification_condition: 待填写
+  - stage: SHAREHOLDER_RETURN
+    claim: 待填写
+    known_facts: [待填写]
+    unknowns: [待填写]
+    indicator_ids: [profit-indicator-b]
+    next_validation_at: 2026-12-31T15:00:00+08:00
+    falsification_condition: 待填写
+
+decision_questions:
+  known_now: 待填写
+  market_believes: 待填写
+  next_decisive_evidence: 待填写

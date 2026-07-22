@@ -1,0 +1,17 @@
+discretionary:
+  enabled: true
+  strategy_id: discretionary-fundamental-v1
+  require_human_approval: true
+  allow_automated_order_generation: false
+  compliant_sources_only: true
+  competing_hypothesis_count: 3
+  key_variable_count: 3
+  minimum_independent_non_price_clusters: 2
+  observation_weight_cap: 0.005
+  evidence_weight_cap: 0.02
+  core_weight_cap: 0.05
+  minimum_probability_edge: 0.05
+  minimum_evidence_upgrade: 0.05
+  correlation_floor: 0.25
+  sizing_multiplier: 0.05
+  calibration_prior_weight: 4

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ def test_all_day_one_configuration_layers_validate_together() -> None:
             PROJECT_ROOT / "config" / "data.yaml",
             PROJECT_ROOT / "config" / "backtest.yaml",
             PROJECT_ROOT / "config" / "risk.yaml",
+            PROJECT_ROOT / "config" / "strategies" / "discretionary.yaml",
             PROJECT_ROOT / "config" / "brokers" / "paper.yaml",
         ],
         environ={},
@@ -36,6 +38,10 @@ def test_all_day_one_configuration_layers_validate_together() -> None:
     assert settings.data.raw_immutable is True
     assert settings.backtest.allow_same_bar_fill is False
     assert settings.risk.kill_switch_required is True
+    assert settings.discretionary.enabled is True
+    assert settings.discretionary.require_human_approval is True
+    assert settings.discretionary.allow_automated_order_generation is False
+    assert settings.discretionary.core_weight_cap == Decimal("0.05")
     assert settings.broker is not None
     assert settings.broker.name == "paper"
 
@@ -100,6 +106,16 @@ def test_live_full_is_unavailable() -> None:
         {"risk": {"reject_stale_market_data": False}},
         {"risk": {"reject_unpublished_data_release": False}},
         {"risk": {"kill_switch_required": False}},
+        {"discretionary": {"require_human_approval": False}},
+        {"discretionary": {"allow_automated_order_generation": True}},
+        {"discretionary": {"compliant_sources_only": False}},
+        {
+            "discretionary": {
+                "observation_weight_cap": 0.03,
+                "evidence_weight_cap": 0.02,
+            }
+        },
+        {"discretionary": {"core_weight_cap": 0.06}},
     ],
 )
 def test_safety_critical_configuration_cannot_be_disabled(payload: dict[str, object]) -> None:
@@ -148,6 +164,7 @@ def test_safe_summary_masks_database_password() -> None:
     assert settings.database.dsn.endswith("@127.0.0.1:5432/aquant")
     assert settings.safe_summary()["database"]["password"] == "**********"
     assert settings.database.password.get_secret_value() not in str(settings.safe_summary())
+    assert settings.safe_summary()["discretionary"]["require_human_approval"] is True
 
 
 def test_runtime_directories_are_created(tmp_path: Path) -> None:

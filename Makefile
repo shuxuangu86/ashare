@@ -26,6 +26,7 @@ config-check:
 		--config config/data.yaml \
 		--config config/backtest.yaml \
 		--config config/risk.yaml \
+		--config config/strategies/discretionary.yaml \
 		--config config/brokers/paper.yaml
 
 infra-config:

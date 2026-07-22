@@ -4,16 +4,19 @@ AQuant 是一套面向沪深 A 股日频/低频研究的本地量化系统。核
 
 - 所有研究都绑定不可变的数据发布版本；
 - 所有可修订数据都以 `available_at` 做 Point-in-time 查询；
+- 量化雷达与证据驱动的主观基本面策略构成两条并列的核心研究路径；
 - 策略只生成目标仓位，研究进程不直接连接券商；
 - 订单意图具有稳定幂等键；
 - 实盘默认关闭，数据或状态异常时停止交易；
 - 相同代码、配置、数据和随机种子产生相同结果。
 
-当前状态：Day 1 至 Day 20 的本地 MVP 代码与离线自动验收已完成。系统包含可信数据、
-PIT 查询、因子研究、双路径回测、机器学习、组合约束、模拟券商、QMT 适配边界、执行
-门控、核对、Kill Switch、API、界面原型和运维手册。开发阶段默认使用 AKShare 主源和
-BaoStock 校验源；实盘始终默认关闭。真实数据、Docker 服务和 Windows QMT 联调仍需在
-目标电脑验收。详见 `docs/acceptance/final-report.md`。
+当前状态：Day 1 至 Day 20 的本地 MVP 与 v0.2 主观基本面核心策略代码、离线自动验收均已
+完成。系统包含可信数据、PIT 查询、因子研究、主观证据研究、双路径回测、机器学习、组合
+约束、模拟券商、QMT 适配边界、执行门控、核对、Kill Switch、API、界面原型和运维手册。
+开发阶段默认使用 AKShare 主源和 BaoStock 校验源；实盘始终默认关闭。真实数据、Docker
+服务和 Windows QMT 联调仍需在目标电脑验收。v0.1 基线详见
+`docs/acceptance/final-report.md`，v0.2 验收见
+`docs/acceptance/v0.2-discretionary-report.md`。
 
 ## 环境要求
 
@@ -39,6 +42,7 @@ uv run aquant config-check \
   --config config/data.yaml \
   --config config/backtest.yaml \
   --config config/risk.yaml \
+  --config config/strategies/discretionary.yaml \
   --config config/brokers/paper.yaml
 docker compose config --quiet
 docker compose up -d --build
@@ -80,6 +84,22 @@ uv run python apps/execution_agent_windows/main.py
 Windows 执行代理入口只验证安全配置，不会自行解锁 LIVE，也不会在未注入实际 QMT Gateway
 时提交订单。
 
+## 主观基本面核心策略
+
+`discretionary-fundamental-v1` 将“价格发现—竞争假设—产业因果链—PIT 证据—市场预期差—
+分级仓位—人工审批—后验校准”纳入与量化策略相同的版本、审计和执行边界。
+
+- 价格只触发研究，单独不能形成仓位；
+- 每个正式研究案维护基本面、资金/技术和噪声三类解释；
+- 非标数据按依赖簇去重，并用后来经营结果校准未来权重；
+- 实时判断与事后平滑版本隔离，回顾性结果不能进入仓位；
+- 默认观察仓、证据仓、核心仓上限为 0.5%、2%、5%；
+- 加仓必须来自经营证据升级，所有仓位建议必须人工批准。
+
+完整方法论见 `docs/strategies/discretionary-fundamental.md`，例行操作见
+`docs/runbooks/discretionary-research-sop.md`，研究案模板位于
+`research/templates/discretionary-case.yaml`。
+
 ## 安全边界
 
 - `config/base.yaml` 固定为 `BACKTEST`，且 `live_trading.enabled=false`。
@@ -101,8 +121,8 @@ Windows 执行代理入口只验证安全配置，不会自行解锁 LIVE，也�
 
 ## 验收基线
 
-- 313 项离线测试通过；
-- 总覆盖率 94.82%；
+- 368 项离线测试通过；
+- 总覆盖率 94.35%；
 - Ruff、mypy strict 和 pre-commit 必须全部通过；
 - 合成市场覆盖停牌、涨跌停、费用、部分成交、幂等、乱序回调与故障闭锁；
 - 真实收益、真实数据供应商稳定性和真实券商连接不属于离线测试结论。

@@ -1,5 +1,6 @@
 import os
 from collections.abc import Mapping, MutableMapping, Sequence
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Self
 
@@ -143,6 +144,37 @@ class RiskSettings(StrictSettingsModel):
         return self
 
 
+class DiscretionaryStrategySettings(StrictSettingsModel):
+    enabled: bool = False
+    strategy_id: str = "discretionary-fundamental-v1"
+    require_human_approval: bool = True
+    allow_automated_order_generation: bool = False
+    compliant_sources_only: bool = True
+    competing_hypothesis_count: int = Field(default=3, ge=3, le=3)
+    key_variable_count: int = Field(default=3, ge=3, le=3)
+    minimum_independent_non_price_clusters: int = Field(default=2, ge=2)
+    observation_weight_cap: Decimal = Field(default=Decimal("0.005"), gt=0, le=1)
+    evidence_weight_cap: Decimal = Field(default=Decimal("0.02"), gt=0, le=1)
+    core_weight_cap: Decimal = Field(default=Decimal("0.05"), gt=0, le=1)
+    minimum_probability_edge: Decimal = Field(default=Decimal("0.05"), ge=0, le=1)
+    minimum_evidence_upgrade: Decimal = Field(default=Decimal("0.05"), ge=0, le=1)
+    correlation_floor: Decimal = Field(default=Decimal("0.25"), ge=0, le=1)
+    sizing_multiplier: Decimal = Field(default=Decimal("0.05"), gt=0)
+    calibration_prior_weight: Decimal = Field(default=Decimal("4"), gt=0)
+
+    @model_validator(mode="after")
+    def require_governed_research(self) -> Self:
+        if not self.require_human_approval:
+            raise ValueError("discretionary strategy always requires human approval")
+        if self.allow_automated_order_generation:
+            raise ValueError("discretionary research cannot automatically generate broker orders")
+        if not self.compliant_sources_only:
+            raise ValueError("discretionary evidence must use compliant acquisition sources")
+        if not (self.observation_weight_cap <= self.evidence_weight_cap <= self.core_weight_cap):
+            raise ValueError("discretionary position caps must increase by evidence tier")
+        return self
+
+
 class BrokerSettings(StrictSettingsModel):
     name: str
     mode: RunMode
@@ -170,6 +202,9 @@ class AppSettings(StrictSettingsModel):
     data: DataSettings = Field(default_factory=DataSettings)
     backtest: BacktestSettings = Field(default_factory=BacktestSettings)
     risk: RiskSettings = Field(default_factory=RiskSettings)
+    discretionary: DiscretionaryStrategySettings = Field(
+        default_factory=DiscretionaryStrategySettings
+    )
     broker: BrokerSettings | None = None
 
     @model_validator(mode="after")
@@ -185,6 +220,8 @@ class AppSettings(StrictSettingsModel):
             and (self.mode is not RunMode.LIVE or not self.live_trading.enabled)
         ):
             raise ValueError("live broker submission requires the application LIVE gate")
+        if self.discretionary.core_weight_cap > Decimal(str(self.risk.max_single_name_weight)):
+            raise ValueError("discretionary core cap cannot exceed the global single-name cap")
         return self
 
     def ensure_runtime_directories(self, root: Path) -> None:
@@ -212,6 +249,7 @@ class AppSettings(StrictSettingsModel):
             "data": self.data.model_dump(mode="json"),
             "backtest": self.backtest.model_dump(mode="json"),
             "risk": self.risk.model_dump(mode="json"),
+            "discretionary": self.discretionary.model_dump(mode="json"),
             "broker": self.broker.model_dump(mode="json") if self.broker else None,
         }
 
