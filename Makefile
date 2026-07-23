@@ -1,4 +1,4 @@
-.PHONY: bootstrap lock test quality format config-check infra-config infra-up infra-down tushare-backfill tushare-status
+.PHONY: bootstrap lock test quality format config-check infra-config infra-up infra-down tushare-backfill tushare-status tushare-daily-close tushare-daily-morning tushare-daily-status
 
 bootstrap:
 	uv sync --group dev --extra data --extra research --extra free-data --extra optimization --extra services --extra ui
@@ -43,3 +43,12 @@ tushare-backfill:
 
 tushare-status:
 	uv run python -u scripts/tushare_backfill.py --status-only
+
+tushare-daily-close:
+	uv run --extra data python -u scripts/tushare_daily_update.py --mode close --workers 4 --interval 0.25
+
+tushare-daily-morning:
+	uv run --extra data python -u scripts/tushare_daily_update.py --mode morning --workers 4 --interval 0.25
+
+tushare-daily-status:
+	uv run --extra data python -u scripts/tushare_daily_update.py --status-only

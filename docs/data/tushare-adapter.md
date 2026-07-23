@@ -27,11 +27,10 @@ Adapter 按 Tushare 官方 HTTP 协议发送 JSON POST：`api_name`、`token`、
 - Token 只从运行环境读取，不写入 YAML、日志、Manifest 或测试 Fixture。
 - 原始响应无论业务 `code` 是否成功，都应先归档再校验。
 - Raw Manifest 保存 HTTP 状态、请求 ID、请求参数、响应时刻、字节数和 SHA-256。
-- 标准化层拒绝北交所，因为 MVP 范围只包括沪深 A 股。
+- 标准化代码支持上交所 `XSHG`、深交所 `XSHE` 与北交所 `XBSE`。
 - `stock_basic` 需要分别拉取上市、退市和暂停状态，不能只依赖默认 `L`。
 
 ## 待本机联调
 
 在 `.env` 设置 `TUSHARE_TOKEN` 后执行后续 Day 2 拉取命令。不要把 Token 粘贴到聊天、
 提交到 Git，或写进 `config/data.yaml`。
-

@@ -14,7 +14,7 @@ def test_api_health_version_and_fail_closed_readiness() -> None:
         "service": "aquant",
     }
     assert client.get("/version").json() == {
-        "version": "0.2.0",
+        "version": "0.2.1",
         "live_default": "disabled",
     }
     assert client.get("/ready").json() == {

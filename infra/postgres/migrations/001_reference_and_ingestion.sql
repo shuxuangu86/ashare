@@ -5,7 +5,7 @@ CREATE SCHEMA IF NOT EXISTS aquant;
 CREATE TABLE aquant.instruments (
     symbol              text PRIMARY KEY,
     security_code       text NOT NULL CHECK (security_code ~ '^[0-9]{6}$'),
-    exchange            text NOT NULL CHECK (exchange IN ('XSHG', 'XSHE')),
+    exchange            text NOT NULL CHECK (exchange IN ('XSHG', 'XSHE', 'XBSE')),
     name                text NOT NULL CHECK (length(trim(name)) > 0),
     security_type       text NOT NULL CHECK (security_type = 'STOCK'),
     board               text NOT NULL CHECK (board IN ('MAIN', 'STAR', 'CHINEXT', 'OTHER')),
@@ -21,7 +21,7 @@ CREATE TABLE aquant.instruments (
 );
 
 CREATE TABLE aquant.trading_calendar (
-    exchange            text NOT NULL CHECK (exchange IN ('XSHG', 'XSHE')),
+    exchange            text NOT NULL CHECK (exchange IN ('XSHG', 'XSHE', 'XBSE')),
     trade_date          date NOT NULL,
     is_open             boolean NOT NULL,
     source              text NOT NULL,

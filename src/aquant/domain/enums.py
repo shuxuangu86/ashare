@@ -16,6 +16,7 @@ class LiveTier(StrEnum):
 class Exchange(StrEnum):
     XSHG = "XSHG"
     XSHE = "XSHE"
+    XBSE = "XBSE"
 
 
 class SecurityType(StrEnum):

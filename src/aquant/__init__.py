@@ -3,4 +3,4 @@
 from aquant.domain.enums import RunMode
 
 __all__ = ["RunMode"]
-__version__ = "0.2.0"
+__version__ = "0.2.1"

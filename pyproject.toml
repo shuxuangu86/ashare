@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aquant"
-version = "0.2.0"
+version = "0.2.1"
 description = "Point-in-time safe A-share quantitative research and trading system"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -65,6 +65,7 @@ packages = ["src/aquant"]
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --cov=aquant --cov-report=term-missing --cov-fail-under=85"
 testpaths = ["tests"]
+pythonpath = ["."]
 xfail_strict = true
 
 [tool.coverage.run]

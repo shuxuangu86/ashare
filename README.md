@@ -10,13 +10,15 @@ AQuant 是一套面向沪深 A 股日频/低频研究的本地量化系统。核
 - 实盘默认关闭，数据或状态异常时停止交易；
 - 相同代码、配置、数据和随机种子产生相同结果。
 
-当前状态：Day 1 至 Day 20 的本地 MVP 与 v0.2 主观基本面核心策略代码、离线自动验收均已
-完成。系统包含可信数据、PIT 查询、因子研究、主观证据研究、双路径回测、机器学习、组合
-约束、模拟券商、QMT 适配边界、执行门控、核对、Kill Switch、API、界面原型和运维手册。
+当前状态：Day 1 至 Day 20 的本地 MVP、v0.2 主观基本面核心策略与 v0.2.1 日终增量更新
+代码、离线自动验收均已完成。系统包含可信数据、PIT 查询、因子研究、主观证据研究、
+双路径回测、机器学习、组合约束、模拟券商、QMT 适配边界、执行门控、核对、Kill Switch、
+API、界面原型和运维手册。
 开发阶段默认使用 AKShare 主源和 BaoStock 校验源；实盘始终默认关闭。真实数据、Docker
 服务和 Windows QMT 联调仍需在目标电脑验收。v0.1 基线详见
 `docs/acceptance/final-report.md`，v0.2 验收见
-`docs/acceptance/v0.2-discretionary-report.md`。
+`docs/acceptance/v0.2-discretionary-report.md`，v0.2.1 日更验收见
+`docs/acceptance/v0.2.1-daily-update-report.md`。
 
 ## 环境要求
 
@@ -70,7 +72,14 @@ make infra-up       # 构建并启动基础服务
 make quality        # Ruff + mypy + pytest + 覆盖率门槛
 make tushare-backfill # 断点续传归档 Tushare 全历史日频研究数据
 make tushare-status   # 查看 Tushare 归档检查点
+make tushare-daily-close   # 19:30 收盘后完整增量更新
+make tushare-daily-morning # 08:30 最近三个交易日补漏
+make tushare-daily-status  # 查看两档日更的最近状态
 ```
+
+Windows 自动任务安装与失败恢复见
+`docs/runbooks/tushare-daily-update.md`。默认只创建 19:30 与次日 08:30 两个任务；
+不再保留 17:20 的独立任务。
 
 其他入口：
 
@@ -121,8 +130,7 @@ Windows 执行代理入口只验证安全配置，不会自行解锁 LIVE，也�
 
 ## 验收基线
 
-- 368 项离线测试通过；
-- 总覆盖率 94.35%；
+- 离线测试、覆盖率、Ruff 与 mypy 验收结果见对应版本验收报告；
 - Ruff、mypy strict 和 pre-commit 必须全部通过；
 - 合成市场覆盖停牌、涨跌停、费用、部分成交、幂等、乱序回调与故障闭锁；
 - 真实收益、真实数据供应商稳定性和真实券商连接不属于离线测试结论。
