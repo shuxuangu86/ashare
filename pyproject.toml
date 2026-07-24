@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aquant"
-version = "0.3.0a3"
+version = "0.3.0a4"
 description = "Point-in-time safe A-share quantitative research and trading system"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"

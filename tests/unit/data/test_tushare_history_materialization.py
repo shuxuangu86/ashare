@@ -135,6 +135,65 @@ def test_catalog_selects_latest_complete_pagination_family(tmp_path: Path) -> No
     assert pages[0].row_count == 1
 
 
+def test_catalog_reconstructs_latest_family_from_duplicate_offsets(tmp_path: Path) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    fields = ["exchange", "cal_date", "is_open"]
+    base = {"start_date": "19900101", "end_date": "20260717"}
+    old = datetime(2026, 7, 19, tzinfo=UTC)
+    new = datetime(2026, 7, 20, tzinfo=UTC)
+    for updated_at, first_day in ((old, "19900101"), (new, "19900102")):
+        _page(
+            state,
+            raw,
+            api_name="trade_cal",
+            params={**base, "limit": 1, "offset": 0},
+            fields=fields,
+            items=[["SSE", first_day, "1"]],
+            updated_at=updated_at,
+        )
+        _page(
+            state,
+            raw,
+            api_name="trade_cal",
+            params={**base, "limit": 1, "offset": 1},
+            fields=fields,
+            items=[],
+            updated_at=updated_at + timedelta(seconds=1),
+        )
+
+    pages = TushareHistoryCatalog(state).pages("trade_cal")
+
+    assert len(pages) == 1
+    assert pages[0].updated_at == new
+
+
+def test_catalog_rejects_duplicate_offsets_without_a_complete_family(tmp_path: Path) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    fields = ["exchange", "cal_date", "is_open"]
+    base = {"start_date": "19900101", "end_date": "20260717"}
+    for index in range(2):
+        _page(
+            state,
+            raw,
+            api_name="trade_cal",
+            params={**base, "limit": 1, "offset": 0},
+            fields=fields,
+            items=[["SSE", f"1990010{index + 1}", "1"]],
+            updated_at=datetime(2026, 7, 19 + index, tzinfo=UTC),
+        )
+
+    try:
+        TushareHistoryCatalog(state).pages("trade_cal")
+    except ValueError as exc:
+        assert "no complete pagination family" in str(exc)
+    else:
+        raise AssertionError("duplicate non-terminal pages must not be accepted as complete")
+
+
 def test_materializer_corrects_units_windows_and_stock_metadata(tmp_path: Path) -> None:
     state = tmp_path / "state.sqlite3"
     raw = tmp_path / "raw"

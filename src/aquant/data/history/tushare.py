@@ -206,20 +206,60 @@ class TushareHistoryCatalog:
 
         selected: list[RawHistoryPage] = []
         for request_pages in by_request.values():
-            by_limit: dict[int, list[RawHistoryPage]] = defaultdict(list)
+            by_shape: dict[tuple[int, tuple[str, ...]], list[RawHistoryPage]] = defaultdict(list)
             for page in request_pages:
-                by_limit[page.limit].append(page)
+                by_shape[(page.limit, page.fields)].append(page)
             valid: list[list[RawHistoryPage]] = []
-            for limit, family in by_limit.items():
-                ordered = sorted(family, key=lambda item: item.offset)
+            for (limit, _fields), family in by_shape.items():
                 if limit <= 0:
-                    if len(ordered) == 1:
-                        valid.append(ordered)
+                    valid.append(
+                        [
+                            max(
+                                family,
+                                key=lambda item: (
+                                    item.updated_at,
+                                    str(item.payload_path),
+                                ),
+                            )
+                        ]
+                    )
                     continue
-                offsets = [page.offset for page in ordered]
-                expected = list(range(0, offsets[-1] + limit, limit))
-                if offsets == expected and ordered[-1].row_count < limit:
-                    valid.append(ordered)
+                by_offset: dict[int, list[RawHistoryPage]] = defaultdict(list)
+                for page in family:
+                    if page.offset >= 0 and page.offset % limit == 0:
+                        by_offset[page.offset].append(page)
+                terminals = sorted(
+                    (page for page in family if page.row_count < limit),
+                    key=lambda item: (
+                        item.updated_at,
+                        item.offset,
+                        str(item.payload_path),
+                    ),
+                )
+                for terminal in terminals:
+                    if terminal.offset < 0 or terminal.offset % limit:
+                        continue
+                    reconstructed: list[RawHistoryPage] = []
+                    for offset in range(0, terminal.offset, limit):
+                        eligible = [
+                            page
+                            for page in by_offset.get(offset, ())
+                            if page.row_count == limit and page.updated_at <= terminal.updated_at
+                        ]
+                        if not eligible:
+                            break
+                        reconstructed.append(
+                            max(
+                                eligible,
+                                key=lambda item: (
+                                    item.updated_at,
+                                    str(item.payload_path),
+                                ),
+                            )
+                        )
+                    else:
+                        reconstructed.append(terminal)
+                        valid.append(reconstructed)
             if not valid:
                 label = json.dumps(request_pages[0].base_params, ensure_ascii=False)
                 raise ValueError(f"no complete pagination family for {label}")
