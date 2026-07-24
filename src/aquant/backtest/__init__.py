@@ -1,7 +1,7 @@
 """Vectorized factor analysis and event-driven strategy backtesting."""
 
 from aquant.backtest.accounting import PortfolioLedger, PortfolioSnapshot, Position
-from aquant.backtest.costs import AshareFeeModel, FeeBreakdown
+from aquant.backtest.costs import AshareFeeModel, AshareFeeSchedule, FeeBreakdown
 from aquant.backtest.event_engine import EventKind
 from aquant.backtest.event_engine.engine import (
     BacktestResult,
@@ -25,6 +25,7 @@ from aquant.backtest.metrics import BacktestMetrics, calculate_metrics, render_m
 __all__ = [
     "AshareExecutionRules",
     "AshareFeeModel",
+    "AshareFeeSchedule",
     "AshareOpenMatcher",
     "BacktestMetrics",
     "BacktestOrder",

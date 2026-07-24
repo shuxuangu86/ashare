@@ -9,7 +9,12 @@ from aquant.domain.time import require_aware
 
 @dataclass(frozen=True, slots=True)
 class MicrocapObservation:
-    """Point-in-time inputs used by the transparent micro-cap baseline."""
+    """Point-in-time inputs used by micro-cap research prototypes.
+
+    ``available_at`` must be the latest availability timestamp of every populated
+    field.  This makes a combined cross-section fail closed when a fundamental or
+    market field was not yet knowable at signal time.
+    """
 
     symbol: Symbol
     trade_date: date
@@ -18,6 +23,13 @@ class MicrocapObservation:
     total_market_cap: Decimal
     suspended: bool
     is_st: bool
+    float_market_cap: Decimal | None = None
+    pb: Decimal | None = None
+    net_profit_yoy: Decimal | None = None
+    dividend_yield: Decimal | None = None
+    debt_to_assets: Decimal | None = None
+    turnover_volatility_20d: Decimal | None = None
+    is_delisting_risk: bool = False
 
     def __post_init__(self) -> None:
         available_at = require_aware(self.available_at, field_name="available_at")
@@ -28,6 +40,31 @@ class MicrocapObservation:
             raise ValueError("total market cap must be finite and positive")
         object.__setattr__(self, "available_at", available_at)
         object.__setattr__(self, "total_market_cap", market_cap)
+        for field_name in (
+            "float_market_cap",
+            "pb",
+            "net_profit_yoy",
+            "dividend_yield",
+            "debt_to_assets",
+            "turnover_volatility_20d",
+        ):
+            raw = getattr(self, field_name)
+            if raw is None:
+                continue
+            value = Decimal(raw)
+            if not value.is_finite():
+                raise ValueError(f"{field_name} must be finite when populated")
+            object.__setattr__(self, field_name, value)
+        if self.float_market_cap is not None and self.float_market_cap <= 0:
+            raise ValueError("float market cap must be positive when populated")
+        for field_name in ("dividend_yield", "debt_to_assets", "turnover_volatility_20d"):
+            value = getattr(self, field_name)
+            if value is not None and value < 0:
+                raise ValueError(f"{field_name} cannot be negative")
+
+    @property
+    def effective_float_market_cap(self) -> Decimal:
+        return self.float_market_cap or self.total_market_cap
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +94,7 @@ class MicrocapUniverseConfig:
     minimum_listing_days: int = 120
     exclude_st: bool = True
     exclude_suspended: bool = True
+    exclude_delisting_risk: bool = True
     exchanges: frozenset[Exchange] = frozenset({Exchange.XSHG, Exchange.XSHE})
 
     def __post_init__(self) -> None:
@@ -88,6 +126,7 @@ class MicrocapSelector:
     def select(self, snapshot: MicrocapSnapshot) -> MicrocapSelection:
         eligible: list[MicrocapObservation] = []
         excluded = {
+            "delisting_risk": 0,
             "exchange": 0,
             "new_listing": 0,
             "st": 0,
@@ -120,6 +159,8 @@ class MicrocapSelector:
             return "new_listing"
         if self._config.exclude_st and item.is_st:
             return "st"
+        if self._config.exclude_delisting_risk and item.is_delisting_risk:
+            return "delisting_risk"
         if self._config.exclude_suspended and item.suspended:
             return "suspended"
         return None

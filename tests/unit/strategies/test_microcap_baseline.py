@@ -64,6 +64,7 @@ def test_selector_is_deterministic_and_reports_every_exclusion() -> None:
     )
     assert selection.eligible_count == 3
     assert dict(selection.excluded_counts) == {
+        "delisting_risk": 0,
         "exchange": 1,
         "new_listing": 1,
         "st": 1,

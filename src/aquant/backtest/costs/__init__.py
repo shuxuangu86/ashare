@@ -1,3 +1,3 @@
-from aquant.backtest.costs.fees import AshareFeeModel, FeeBreakdown
+from aquant.backtest.costs.fees import AshareFeeModel, AshareFeeSchedule, FeeBreakdown
 
-__all__ = ["AshareFeeModel", "FeeBreakdown"]
+__all__ = ["AshareFeeModel", "AshareFeeSchedule", "FeeBreakdown"]

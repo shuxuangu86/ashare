@@ -67,6 +67,15 @@ class SecurityStatus:
     suspended: bool
     is_st: bool
     limit_status: LimitStatus = LimitStatus.UNKNOWN
+    prior_20d_average_volume: Decimal | None = None
+
+    def __post_init__(self) -> None:
+        if self.prior_20d_average_volume is None:
+            return
+        volume = Decimal(self.prior_20d_average_volume)
+        if not volume.is_finite() or volume < 0:
+            raise ValueError("prior 20-day average volume must be finite and non-negative")
+        object.__setattr__(self, "prior_20d_average_volume", volume)
 
     @property
     def can_buy(self) -> bool:
