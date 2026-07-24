@@ -10,8 +10,9 @@ AQuant 是一套面向沪深 A 股日频/低频研究的本地量化系统。核
 - 实盘默认关闭，数据或状态异常时停止交易；
 - 相同代码、配置、数据和随机种子产生相同结果。
 
-当前状态：Day 1 至 Day 20 的本地 MVP、v0.2 主观基本面核心策略与 v0.2.1 日终增量更新
-代码、离线自动验收均已完成。系统包含可信数据、PIT 查询、因子研究、主观证据研究、
+当前状态：Day 1 至 Day 20 的本地 MVP、v0.2 主观基本面核心策略、v0.2.1 日终增量更新
+与 v0.3.0a3 历史 Standard/PIT 物化代码、离线自动验收均已完成。系统包含可信数据、
+PIT 查询、因子研究、主观证据研究、
 双路径回测、机器学习、组合约束、模拟券商、QMT 适配边界、执行门控、核对、Kill Switch、
 API、界面原型和运维手册。
 开发阶段默认使用 AKShare 主源和 BaoStock 校验源；实盘始终默认关闭。真实数据、Docker
@@ -75,11 +76,15 @@ make tushare-status   # 查看 Tushare 归档检查点
 make tushare-daily-close   # 19:30 收盘后完整增量更新
 make tushare-daily-morning # 08:30 最近三个交易日补漏
 make tushare-daily-status  # 查看两档日更的最近状态
+make tushare-history-materialize # 离线生成不可变历史 Standard/PIT 发布
+make microcap-history-smoke      # 短区间数据/PIT/执行链路冒烟
 ```
 
 Windows 自动任务安装与失败恢复见
 `docs/runbooks/tushare-daily-update.md`。默认只创建 19:30 与次日 08:30 两个任务；
 不再保留 17:20 的独立任务。
+历史物化的单位、PIT和公司行为边界见
+`docs/data/tushare-history-materialization.md`。
 
 其他入口：
 
