@@ -9,6 +9,7 @@ from aquant.backtest.event_engine.engine import (
     EventDrivenStrategy,
     MarketSession,
     StrategyContext,
+    UnfilledOrderPolicy,
 )
 from aquant.backtest.matching import (
     AshareExecutionRules,
@@ -41,6 +42,7 @@ __all__ = [
     "PortfolioSnapshot",
     "Position",
     "StrategyContext",
+    "UnfilledOrderPolicy",
     "calculate_metrics",
     "render_markdown_report",
 ]

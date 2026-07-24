@@ -9,10 +9,12 @@ from aquant.backtest import (
     AshareFeeModel,
     AshareOpenMatcher,
     BacktestOrder,
+    BacktestOrderStatus,
     EventDrivenBacktest,
     MarketSession,
     OrderRequest,
     StrategyContext,
+    UnfilledOrderPolicy,
     calculate_metrics,
     render_markdown_report,
 )
@@ -202,3 +204,23 @@ def test_rule_aware_engine_fails_closed_without_status() -> None:
     ).run((_session(15, with_status=False), _session(16, with_status=False)), BuyOnce())
     assert result.fills == ()
     assert result.orders[0].filled_quantity == 0
+
+
+def test_day_order_policy_prevents_a_blocked_order_from_filling_later() -> None:
+    blocked = _session(16, with_status=True)
+    blocked = MarketSession(
+        blocked.trade_date,
+        blocked.open_at,
+        blocked.close_at,
+        blocked.bars,
+        (_status(limit_status=LimitStatus.LIMIT_UP),),
+    )
+    result = EventDrivenBacktest(
+        run_id="day-order-cancel",
+        initial_cash=Decimal("2000"),
+        matcher=AshareOpenMatcher(),
+        unfilled_order_policy=UnfilledOrderPolicy.CANCEL_AFTER_OPEN,
+    ).run((_session(15, with_status=True), blocked, _session(17, with_status=True)), BuyOnce())
+
+    assert result.fills == ()
+    assert result.orders[0].status is BacktestOrderStatus.CANCELLED

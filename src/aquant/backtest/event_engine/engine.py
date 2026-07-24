@@ -3,6 +3,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import ROUND_FLOOR, Decimal
+from enum import StrEnum
 from itertools import pairwise
 from typing import Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -73,6 +74,11 @@ class EventDrivenStrategy(Protocol):
     def on_close(self, context: StrategyContext) -> tuple[OrderRequest, ...]: ...
 
 
+class UnfilledOrderPolicy(StrEnum):
+    KEEP_OPEN = "KEEP_OPEN"
+    CANCEL_AFTER_OPEN = "CANCEL_AFTER_OPEN"
+
+
 @dataclass(frozen=True, slots=True)
 class BacktestResult:
     run_id: str
@@ -107,12 +113,14 @@ class EventDrivenBacktest:
         run_id: str,
         initial_cash: Decimal,
         matcher: OpenMatcher | None = None,
+        unfilled_order_policy: UnfilledOrderPolicy = UnfilledOrderPolicy.KEEP_OPEN,
     ) -> None:
         if not run_id.strip():
             raise ValueError("backtest run_id must not be blank")
         self._run_id = run_id.strip()
         self._initial_cash = Decimal(initial_cash)
         self._matcher = matcher or NextOpenMatcher()
+        self._unfilled_order_policy = unfilled_order_policy
 
     def run(
         self,
@@ -165,12 +173,20 @@ class EventDrivenBacktest:
                         status=statuses.get(order.symbol),
                     )
                     if fill is None:
+                        if self._unfilled_order_policy is UnfilledOrderPolicy.CANCEL_AFTER_OPEN:
+                            order_book.cancel(order.order_id)
                         continue
                     order_book.validate_fill(fill)
                     ledger.validate_fill(fill)
                     order_book.apply_fill(fill)
                     ledger.apply_fill(fill)
                     events.append(FillEvent(fill))
+                    updated = order_book.get(order.order_id)
+                    if (
+                        self._unfilled_order_policy is UnfilledOrderPolicy.CANCEL_AFTER_OPEN
+                        and updated.remaining_quantity
+                    ):
+                        order_book.cancel(order.order_id)
                 continue
 
             prices = {bar.symbol: bar.close for bar in session.bars}
