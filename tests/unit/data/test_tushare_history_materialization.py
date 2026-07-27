@@ -2,6 +2,7 @@ import hashlib
 import json
 import sqlite3
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -12,6 +13,11 @@ from aquant.data.history import (
     DuckDBMicrocapHistory,
     TushareHistoryCatalog,
     TushareHistoryMaterializer,
+)
+from aquant.data.history.tushare import (
+    _is_no_trade_daily_record,
+    _price_limits,
+    _stock_market,
 )
 
 
@@ -192,6 +198,401 @@ def test_catalog_rejects_duplicate_offsets_without_a_complete_family(tmp_path: P
         assert "no complete pagination family" in str(exc)
     else:
         raise AssertionError("duplicate non-terminal pages must not be accepted as complete")
+
+
+def test_catalog_accepts_fieldless_empty_terminal_after_full_page(tmp_path: Path) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    now = datetime(2026, 7, 20, tzinfo=UTC)
+    base = {"trade_date": "20211229"}
+    fields = ["trade_date", "ts_code", "up_limit", "down_limit"]
+    _page(
+        state,
+        raw,
+        api_name="stk_limit",
+        params={**base, "limit": 1, "offset": 0},
+        fields=fields,
+        items=[["20211229", "000001.SZ", 10, 9]],
+        updated_at=now,
+    )
+    _page(
+        state,
+        raw,
+        api_name="stk_limit",
+        params={**base, "limit": 1, "offset": 1},
+        fields=[],
+        items=[],
+        updated_at=now + timedelta(seconds=1),
+    )
+
+    pages = TushareHistoryCatalog(state).pages("stk_limit", include_empty=True)
+
+    assert [(page.offset, page.row_count) for page in pages] == [(0, 1), (1, 0)]
+
+
+def test_catalog_rejects_fieldless_terminal_without_a_typed_page(tmp_path: Path) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    now = datetime(2026, 7, 20, tzinfo=UTC)
+    _page(
+        state,
+        raw,
+        api_name="stk_limit",
+        params={"trade_date": "20211229", "limit": 2, "offset": 2},
+        fields=[],
+        items=[],
+        updated_at=now,
+    )
+    try:
+        TushareHistoryCatalog(state).pages("stk_limit")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a fieldless terminal requires a compatible typed page")
+
+
+def test_catalog_accepts_fieldless_empty_first_page(tmp_path: Path) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    _page(
+        state,
+        raw,
+        api_name="stk_limit",
+        params={"trade_date": "19901219", "limit": 5800, "offset": 0},
+        fields=[],
+        items=[],
+        updated_at=datetime(2026, 7, 20, tzinfo=UTC),
+    )
+
+    pages = TushareHistoryCatalog(state).pages("stk_limit", include_empty=True)
+
+    assert len(pages) == 1
+    assert pages[0].row_count == 0
+
+
+def test_catalog_ignores_incomplete_global_calendar_when_both_exchanges_complete(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    fields = ["exchange", "cal_date", "is_open", "pretrade_date"]
+    base = {"start_date": "19900101", "end_date": "20260717"}
+    now = datetime(2026, 7, 20, tzinfo=UTC)
+    _page(
+        state,
+        raw,
+        api_name="trade_cal",
+        params={**base, "limit": 1, "offset": 0},
+        fields=fields,
+        items=[["SSE", "19900101", "1", ""]],
+        updated_at=now,
+    )
+    for index, exchange in enumerate(("SSE", "SZSE"), start=1):
+        _page(
+            state,
+            raw,
+            api_name="trade_cal",
+            params={**base, "exchange": exchange, "limit": 1, "offset": 0},
+            fields=fields,
+            items=[[exchange, "19900101", "1", ""]],
+            updated_at=now + timedelta(minutes=index),
+        )
+        _page(
+            state,
+            raw,
+            api_name="trade_cal",
+            params={**base, "exchange": exchange, "limit": 1, "offset": 1},
+            fields=fields,
+            items=[],
+            updated_at=now + timedelta(minutes=index, seconds=1),
+        )
+
+    pages = TushareHistoryCatalog(state).pages("trade_cal")
+
+    assert {page.base_params["exchange"] for page in pages} == {"SSE", "SZSE"}
+    assert all("exchange" in page.base_params for page in pages)
+
+
+def test_catalog_rejects_incomplete_global_calendar_without_both_exchanges(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    fields = ["exchange", "cal_date", "is_open", "pretrade_date"]
+    base = {"start_date": "19900101", "end_date": "20260717"}
+    now = datetime(2026, 7, 20, tzinfo=UTC)
+    for params, items, updated_at in (
+        ({**base, "limit": 1, "offset": 0}, [["SSE", "19900101", "1", ""]], now),
+        (
+            {**base, "exchange": "SSE", "limit": 1, "offset": 0},
+            [["SSE", "19900101", "1", ""]],
+            now + timedelta(minutes=1),
+        ),
+        (
+            {**base, "exchange": "SSE", "limit": 1, "offset": 1},
+            [],
+            now + timedelta(minutes=1, seconds=1),
+        ),
+    ):
+        _page(
+            state,
+            raw,
+            api_name="trade_cal",
+            params=params,
+            fields=fields,
+            items=items,
+            updated_at=updated_at,
+        )
+
+    try:
+        TushareHistoryCatalog(state).pages("trade_cal")
+    except ValueError as exc:
+        message = str(exc)
+        assert "api_name=trade_cal" in message
+        assert '"offset": 0' in message
+        assert '"row_count": 1' in message
+        assert '"fields"' in message
+    else:
+        raise AssertionError("a global calendar cannot replace a missing exchange family")
+
+
+def test_catalog_rejects_global_calendar_when_exchange_fields_are_incomplete(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    base = {"start_date": "19900101", "end_date": "20260717"}
+    now = datetime(2026, 7, 20, tzinfo=UTC)
+    for index, exchange in enumerate(("", "SSE", "SZSE")):
+        params = {
+            **base,
+            "limit": 1 if not exchange else 2,
+            "offset": 0,
+        }
+        if exchange:
+            params["exchange"] = exchange
+        _page(
+            state,
+            raw,
+            api_name="trade_cal",
+            params=params,
+            fields=["exchange", "cal_date"],
+            items=[[exchange or "SSE", "19900101"]],
+            updated_at=now + timedelta(minutes=index),
+        )
+
+    try:
+        TushareHistoryCatalog(state).pages("trade_cal")
+    except ValueError as exc:
+        assert "api_name=trade_cal" in str(exc)
+    else:
+        raise AssertionError("exchange families missing is_open must fail closed")
+
+
+def _daily_redundancy_fixture(
+    state: Path,
+    raw: Path,
+    *,
+    daily_dates: tuple[str, ...],
+) -> None:
+    now = datetime(2026, 7, 20, tzinfo=UTC)
+    calendar_fields = ["exchange", "cal_date", "is_open", "pretrade_date"]
+    for index, exchange in enumerate(("SSE", "SZSE")):
+        _page(
+            state,
+            raw,
+            api_name="trade_cal",
+            params={
+                "start_date": "20260716",
+                "end_date": "20260717",
+                "exchange": exchange,
+                "limit": 3,
+                "offset": 0,
+            },
+            fields=calendar_fields,
+            items=[
+                [exchange, "20260716", "1", "20260715"],
+                [exchange, "20260717", "1", "20260716"],
+            ],
+            updated_at=now + timedelta(minutes=index),
+        )
+    daily_fields = [
+        "ts_code",
+        "trade_date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "vol",
+        "amount",
+    ]
+    _page(
+        state,
+        raw,
+        api_name="daily",
+        params={"start_date": "20260716", "end_date": "20260717", "limit": 1, "offset": 0},
+        fields=daily_fields,
+        items=[["000001.SZ", "20260716", 1, 1, 1, 1, 1, 1]],
+        updated_at=now,
+    )
+    for index, trade_date in enumerate(daily_dates, start=1):
+        _page(
+            state,
+            raw,
+            api_name="daily",
+            params={"trade_date": trade_date, "limit": 2, "offset": 0},
+            fields=daily_fields,
+            items=[["000001.SZ", trade_date, 1, 1, 1, 1, 1, 1]],
+            updated_at=now + timedelta(minutes=index),
+        )
+
+
+def test_catalog_ignores_incomplete_global_daily_with_exact_calendar_coverage(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    _daily_redundancy_fixture(
+        state,
+        raw,
+        daily_dates=("20260716", "20260717"),
+    )
+
+    pages = TushareHistoryCatalog(state).pages("daily")
+
+    assert {page.base_params["trade_date"] for page in pages} == {
+        "20260716",
+        "20260717",
+    }
+
+
+def test_catalog_rejects_incomplete_global_daily_with_missing_open_date(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    _state(state)
+    _daily_redundancy_fixture(state, raw, daily_dates=("20260716",))
+
+    try:
+        TushareHistoryCatalog(state).pages("daily")
+    except ValueError as exc:
+        assert "api_name=daily" in str(exc)
+    else:
+        raise AssertionError("a missing open-market daily family must fail closed")
+
+
+def test_no_trade_daily_placeholder_is_identified_strictly() -> None:
+    placeholder = {
+        "ts_code": "600717.SH",
+        "trade_date": "20260610",
+        "open": 0,
+        "high": 0,
+        "low": 0,
+        "close": 4.31,
+        "pre_close": 4.31,
+        "vol": 0,
+        "amount": 0,
+        "change": 0,
+        "pct_chg": 0,
+    }
+
+    assert _is_no_trade_daily_record(placeholder)
+
+    traded = {**placeholder, "open": 4.31, "high": 4.31, "low": 4.31, "vol": 1}
+    assert not _is_no_trade_daily_record(traded)
+
+
+def test_malformed_zero_price_daily_record_fails_closed() -> None:
+    malformed = {
+        "ts_code": "600717.SH",
+        "trade_date": "20260610",
+        "open": 0,
+        "high": 4.31,
+        "low": 4.31,
+        "close": 4.31,
+        "pre_close": 4.31,
+        "vol": 1,
+        "amount": 1,
+        "change": 0,
+        "pct_chg": 0,
+    }
+    try:
+        _is_no_trade_daily_record(malformed)
+    except ValueError as exc:
+        assert "600717.SH" in str(exc)
+    else:
+        raise AssertionError("mixed zero-price records must fail closed")
+
+
+def test_zero_price_limits_represent_an_unlimited_session() -> None:
+    assert _price_limits(0, 0) == (None, None)
+    assert _price_limits(99999.99, 0) == (None, None)
+    assert _price_limits(99999.99, None) == (None, None)
+    assert _price_limits(100000, None) == (None, None)
+    assert _price_limits(100000, 0) == (None, None)
+    assert _price_limits(11, 9) == (Decimal("11.000000"), Decimal("9.000000"))
+
+
+def test_one_sided_zero_price_limit_fails_closed() -> None:
+    try:
+        _price_limits(0, 9)
+    except ValueError as exc:
+        assert "up_limit=0" in str(exc)
+    else:
+        raise AssertionError("one-sided zero price limits must fail closed")
+
+
+def test_missing_legacy_stock_market_is_explicitly_unknown() -> None:
+    assert _stock_market(None) == "UNKNOWN"
+    assert _stock_market("Main Board") == "Main Board"
+
+
+def test_suspend_types_collapse_to_one_symbol_date_presence_row(tmp_path: Path) -> None:
+    state = tmp_path / "state.sqlite3"
+    raw = tmp_path / "raw"
+    standard = tmp_path / "standard"
+    _state(state)
+    _page(
+        state,
+        raw,
+        api_name="suspend_d",
+        params={"trade_date": "20110523", "limit": 10, "offset": 0},
+        fields=["ts_code", "trade_date", "suspend_type", "suspend_timing"],
+        items=[
+            ["600572.SH", "20110523", "R", None],
+            ["600572.SH", "20110523", "S", None],
+        ],
+        updated_at=datetime(2026, 7, 20, tzinfo=UTC),
+    )
+    result = TushareHistoryMaterializer(
+        catalog=TushareHistoryCatalog(state),
+        standard_root=standard,
+        release_id="test",
+        start_date=date(2011, 5, 23),
+        end_date=date(2011, 5, 23),
+        verify_raw_checksums=True,
+    ).materialize(("suspend_d",))
+
+    table = pq.read_table(
+        result.release_directory / "dataset=suspend_d" / "year=2011" / "data.parquet",
+    )
+
+    assert table.num_rows == 1
+    table = table.select(["ts_code", "trade_date"])
+    assert table.to_pylist() == [
+        {
+            "ts_code": "600572.SH",
+            "trade_date": date(2011, 5, 23),
+        }
+    ]
 
 
 def test_materializer_corrects_units_windows_and_stock_metadata(tmp_path: Path) -> None:

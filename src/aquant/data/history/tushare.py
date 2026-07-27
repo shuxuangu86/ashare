@@ -190,8 +190,8 @@ class TushareHistoryCatalog:
                     f"history dataset {dataset} is missing required fields: {sorted(missing)}"
                 )
 
-    @staticmethod
     def _select_coherent_families(
+        self,
         candidates: Sequence[RawHistoryPage],
     ) -> tuple[RawHistoryPage, ...]:
         by_request: dict[str, list[RawHistoryPage]] = defaultdict(list)
@@ -205,10 +205,23 @@ class TushareHistoryCatalog:
             by_request[key].append(page)
 
         selected: list[RawHistoryPage] = []
+        invalid: list[list[RawHistoryPage]] = []
         for request_pages in by_request.values():
             by_shape: dict[tuple[int, tuple[str, ...]], list[RawHistoryPage]] = defaultdict(list)
+            empty_terminals: list[RawHistoryPage] = []
             for page in request_pages:
+                if page.limit > 0 and page.row_count == 0 and not page.fields:
+                    empty_terminals.append(page)
+                    continue
                 by_shape[(page.limit, page.fields)].append(page)
+            for terminal in empty_terminals:
+                compatible_shapes = [
+                    shape for shape in by_shape if shape[0] == terminal.limit and shape[1]
+                ]
+                for shape in compatible_shapes:
+                    by_shape[shape].append(terminal)
+                if not compatible_shapes and terminal.offset == 0:
+                    by_shape[(terminal.limit, terminal.fields)].append(terminal)
             valid: list[list[RawHistoryPage]] = []
             for (limit, _fields), family in by_shape.items():
                 if limit <= 0:
@@ -261,8 +274,8 @@ class TushareHistoryCatalog:
                         reconstructed.append(terminal)
                         valid.append(reconstructed)
             if not valid:
-                label = json.dumps(request_pages[0].base_params, ensure_ascii=False)
-                raise ValueError(f"no complete pagination family for {label}")
+                invalid.append(request_pages)
+                continue
             winner = max(
                 valid,
                 key=lambda family: (
@@ -271,6 +284,12 @@ class TushareHistoryCatalog:
                 ),
             )
             selected.extend(winner)
+        for request_pages in invalid:
+            if self._is_redundant_trade_cal_global(
+                request_pages, selected
+            ) or self._is_redundant_daily_global(request_pages, selected):
+                continue
+            raise ValueError(TushareHistoryCatalog._pagination_failure(request_pages))
         return tuple(
             sorted(
                 selected,
@@ -281,6 +300,141 @@ class TushareHistoryCatalog:
                     page.offset,
                 ),
             )
+        )
+
+    @staticmethod
+    def _is_redundant_trade_cal_global(
+        request_pages: Sequence[RawHistoryPage],
+        selected: Sequence[RawHistoryPage],
+    ) -> bool:
+        """Allow only a superseded global calendar backed by two complete exchanges."""
+        if not request_pages or any(page.api_name != "trade_cal" for page in request_pages):
+            return False
+        global_params = request_pages[0].base_params
+        if global_params.get("exchange") not in {None, ""}:
+            return False
+        comparable = {key: value for key, value in global_params.items() if key != "exchange"}
+        if not comparable.get("start_date") or not comparable.get("end_date"):
+            return False
+
+        required = _REQUIRED_FIELDS["trade_cal"]
+        for exchange in ("SSE", "SZSE"):
+            exchange_pages = [
+                page
+                for page in selected
+                if page.api_name == "trade_cal"
+                and page.base_params.get("exchange") == exchange
+                and {key: value for key, value in page.base_params.items() if key != "exchange"}
+                == comparable
+            ]
+            if (
+                not exchange_pages
+                or not any(page.row_count > 0 for page in exchange_pages)
+                or any(not required.issubset(page.fields) for page in exchange_pages)
+            ):
+                return False
+        return True
+
+    def _is_redundant_daily_global(
+        self,
+        request_pages: Sequence[RawHistoryPage],
+        selected: Sequence[RawHistoryPage],
+    ) -> bool:
+        """Allow a superseded global daily family only with exact calendar coverage."""
+        if not request_pages or any(page.api_name != "daily" for page in request_pages):
+            return False
+        global_params = request_pages[0].base_params
+        if global_params.get("trade_date") not in {None, ""}:
+            return False
+        start = str(global_params.get("start_date", ""))
+        end = str(global_params.get("end_date", ""))
+        if len(start) != 8 or len(end) != 8 or start > end:
+            return False
+
+        daily_pages = [page for page in selected if page.api_name == "daily"]
+        required = _REQUIRED_FIELDS["daily"]
+        if (
+            not daily_pages
+            or any(not required.issubset(page.fields) for page in daily_pages)
+            or any(page.row_count <= 0 for page in daily_pages)
+        ):
+            return False
+        actual_dates: set[str] = set()
+        for page in daily_pages:
+            trade_date = page.base_params.get("trade_date")
+            if not isinstance(trade_date, str) or len(trade_date) != 8:
+                return False
+            if any(key in page.base_params for key in ("start_date", "end_date")):
+                return False
+            actual_dates.add(trade_date)
+
+        try:
+            calendar_pages = self.pages("trade_cal")
+        except (FileNotFoundError, ValueError):
+            return False
+        expected_dates: set[str] = set()
+        for page in calendar_pages:
+            if not _REQUIRED_FIELDS["trade_cal"].issubset(page.fields):
+                return False
+            try:
+                body = json.loads(page.payload_path.read_bytes())
+            except (OSError, json.JSONDecodeError):
+                return False
+            data = body.get("data")
+            if not isinstance(data, dict):
+                return False
+            fields = data.get("fields")
+            items = data.get("items")
+            if (
+                not isinstance(fields, list)
+                or not isinstance(items, list)
+                or tuple(fields) != page.fields
+                or len(items) != page.row_count
+            ):
+                return False
+            try:
+                date_index = fields.index("cal_date")
+                open_index = fields.index("is_open")
+            except ValueError:
+                return False
+            for item in items:
+                if not isinstance(item, list) or len(item) != len(fields):
+                    return False
+                cal_date = str(item[date_index])
+                if str(item[open_index]) == "1" and start <= cal_date <= end:
+                    expected_dates.add(cal_date)
+        return bool(expected_dates) and actual_dates == expected_dates
+
+    @staticmethod
+    def _pagination_failure(request_pages: Sequence[RawHistoryPage]) -> str:
+        first = request_pages[0]
+        request_label = json.dumps(
+            first.base_params,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        page_details = [
+            {
+                "offset": page.offset,
+                "row_count": page.row_count,
+                "limit": page.limit,
+                "fields": list(page.fields),
+                "updated_at": page.updated_at.isoformat(),
+                "payload_path": str(page.payload_path),
+            }
+            for page in sorted(
+                request_pages,
+                key=lambda page: (
+                    page.offset,
+                    page.updated_at,
+                    str(page.payload_path),
+                ),
+            )
+        ]
+        return (
+            "no complete pagination family: "
+            f"api_name={first.api_name}; request={request_label}; "
+            f"pages={json.dumps(page_details, ensure_ascii=False, sort_keys=True)}"
         )
 
 
@@ -471,6 +625,8 @@ class TushareHistoryMaterializer:
             for page in (*warmup_pages, *target_pages):
                 output: list[dict[str, Any]] = []
                 for record in self._records(page):
+                    if _is_no_trade_daily_record(record):
+                        continue
                     code = _required_text(record, "ts_code")
                     trade_date = _yyyymmdd(record.get("trade_date"), field="trade_date")
                     volume = _decimal(record.get("vol"), field="vol") * Decimal("100")
@@ -512,6 +668,7 @@ class TushareHistoryMaterializer:
                 "Tushare amount thousand-CNY multiplied by 1000 to CNY",
                 "prior_20d_average_volume uses only T-20..T-1 observations",
                 "exchange recovered from ts_code suffix",
+                "zero-volume no-trade placeholders are excluded",
             ),
         )
         self._write_new(
@@ -624,8 +781,8 @@ class TushareHistoryMaterializer:
                 [
                     pa.field("ts_code", pa.string(), nullable=False),
                     pa.field("trade_date", pa.date32(), nullable=False),
-                    pa.field("up_limit", pa.decimal128(20, 6), nullable=False),
-                    pa.field("down_limit", pa.decimal128(20, 6), nullable=False),
+                    pa.field("up_limit", pa.decimal128(20, 6), nullable=True),
+                    pa.field("down_limit", pa.decimal128(20, 6), nullable=True),
                 ]
             ),
             "suspend_d": pa.schema(
@@ -638,7 +795,10 @@ class TushareHistoryMaterializer:
         transformations = {
             "adj_factor": ("cumulative adjustment factor retained without rebasing",),
             "stk_limit": ("provider price limits retained in unadjusted CNY/share",),
-            "suspend_d": ("presence of row means suspended on trade_date",),
+            "suspend_d": (
+                "presence of row means suspended on trade_date",
+                "duplicate suspension types collapse to one symbol-date presence row",
+            ),
         }
 
         def transform(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -651,19 +811,32 @@ class TushareHistoryMaterializer:
                     record.get("adj_factor"), field="adj_factor"
                 ).quantize(Decimal("0.0000000001"))
             elif dataset == "stk_limit":
-                base["up_limit"] = _quantize_price(record.get("up_limit"), field="up_limit")
-                base["down_limit"] = _quantize_price(record.get("down_limit"), field="down_limit")
+                up_limit, down_limit = _price_limits(
+                    record.get("up_limit"), record.get("down_limit")
+                )
+                base["up_limit"] = up_limit
+                base["down_limit"] = down_limit
             return base
 
-        rows = (
-            (page, [transform(record) for record in self._records(page)])
-            for page in self._filter_market_pages(pages)
-        )
+        def transformed_pages() -> Iterator[tuple[RawHistoryPage, list[dict[str, Any]]]]:
+            seen_suspensions: set[tuple[str, date]] = set()
+            for page in self._filter_market_pages(pages):
+                output: list[dict[str, Any]] = []
+                for record in self._records(page):
+                    row = transform(record)
+                    if dataset == "suspend_d":
+                        key = (str(row["ts_code"]), row["trade_date"])
+                        if key in seen_suspensions:
+                            continue
+                        seen_suspensions.add(key)
+                    output.append(row)
+                yield page, output
+
         return self._write_date_partitioned(
             directory,
             dataset,
             schemas[dataset],
-            rows,
+            transformed_pages(),
             transformations=transformations[dataset],
         )
 
@@ -698,7 +871,7 @@ class TushareHistoryMaterializer:
                     "ts_code": code,
                     "symbol": _required_text(record, "symbol"),
                     "name": _required_text(record, "name"),
-                    "market": _required_text(record, "market"),
+                    "market": _stock_market(record.get("market")),
                     "exchange": _exchange_from_ts_code(code),
                     "list_status": request_status,
                     "list_date": _yyyymmdd(record.get("list_date"), field="list_date"),
@@ -740,6 +913,7 @@ class TushareHistoryMaterializer:
             transformations=(
                 "exchange recovered from ts_code suffix because provider field was absent",
                 "list_status recovered from the L/D/P request parameter",
+                "missing legacy market classification retained as UNKNOWN",
                 (
                     "missing D-status delist_date inferred as last daily trade_date "
                     "when present in the materialized window"
@@ -1183,6 +1357,10 @@ def _optional_text(value: object) -> str | None:
     return text or None
 
 
+def _stock_market(value: object) -> str:
+    return _optional_text(value) or "UNKNOWN"
+
+
 def _decimal(value: object, *, field: str) -> Decimal:
     try:
         result = Decimal(str(value))
@@ -1191,6 +1369,42 @@ def _decimal(value: object, *, field: str) -> Decimal:
     if not result.is_finite():
         raise ValueError(f"non-finite decimal field {field}: {value!r}")
     return result
+
+
+def _is_no_trade_daily_record(record: Mapping[str, Any]) -> bool:
+    prices = tuple(_decimal(record.get(field), field=field) for field in ("open", "high", "low"))
+    if not any(value == 0 for value in prices):
+        return False
+    close = _decimal(record.get("close"), field="close")
+    pre_close = _decimal(record.get("pre_close"), field="pre_close")
+    zero_fields = ("vol", "amount", "change", "pct_chg")
+    if (
+        all(value == 0 for value in prices)
+        and close > 0
+        and close == pre_close
+        and all(_decimal(record.get(field), field=field) == 0 for field in zero_fields)
+    ):
+        return True
+    raise ValueError(
+        "invalid zero-price daily record: "
+        f"ts_code={record.get('ts_code')!r}; trade_date={record.get('trade_date')!r}"
+    )
+
+
+def _price_limits(up_value: object, down_value: object) -> tuple[Decimal | None, Decimal | None]:
+    up_limit = _decimal(up_value, field="up_limit")
+    if up_limit in {
+        Decimal("99999.99"),
+        Decimal("100000"),
+    } and down_value in {None, 0}:
+        return None, None
+    down_limit = _decimal(down_value, field="down_limit")
+    if (up_limit == 0 and down_limit == 0) or (up_limit == Decimal("99999.99") and down_limit == 0):
+        return None, None
+    if up_limit <= 0 or down_limit <= 0:
+        raise ValueError(f"invalid price limits: up_limit={up_value!r}; down_limit={down_value!r}")
+    quantum = Decimal("0.000001")
+    return up_limit.quantize(quantum), down_limit.quantize(quantum)
 
 
 def _optional_decimal(value: object) -> Decimal | None:
