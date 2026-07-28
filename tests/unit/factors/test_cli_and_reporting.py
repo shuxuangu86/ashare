@@ -122,9 +122,10 @@ def test_train_cli_uses_purged_walk_forward_and_writes_predictions(
                 "--dataset",
                 str(dataset),
                 "--model",
-                "ridge",
+                "equal_weight",
                 "--output",
                 str(output),
+                "--research-only",
             ]
         )
         == 0
@@ -135,6 +136,22 @@ def test_train_cli_uses_purged_walk_forward_and_writes_predictions(
     predictions = np.load(output)
     assert predictions.shape == (100,)
     assert np.count_nonzero(np.isfinite(predictions)) == 20
+
+
+def test_formal_alpha_training_requires_eight_admitted_factors(tmp_path: Path) -> None:
+    dataset = tmp_path / "dataset.npz"
+    np.savez(dataset, X=np.ones((20, 2)), y=np.arange(20.0))
+    with pytest.raises(SystemExit):
+        train_alpha_model_main(
+            [
+                "--feature-set-id",
+                "baseline_compact_v1",
+                "--dataset",
+                str(dataset),
+                "--model",
+                "ridge",
+            ]
+        )
 
 
 def test_baseline_bundle_cli_publishes_three_immutable_specs(

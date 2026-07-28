@@ -826,6 +826,8 @@ def _verified_stable_payload(
 def train_alpha_model_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Train an ordered L3 alpha baseline")
     parser.add_argument("--feature-set-id", required=True)
+    parser.add_argument("--admission", type=Path)
+    parser.add_argument("--research-only", action="store_true")
     parser.add_argument("--dataset", type=Path)
     parser.add_argument("--model", choices=[item.value for item in ModelKind], default="ridge")
     parser.add_argument("--target-horizon", type=int, default=20)
@@ -850,6 +852,21 @@ def train_alpha_model_main(argv: list[str] | None = None) -> int:
     if args.dataset is None:
         parser.error("--dataset NPZ is required unless --dry-run; expected X, y and optional ic")
     try:
+        admission = _verified_selection(args.admission) if args.admission is not None else None
+        if args.research_only:
+            if args.model not in {
+                ModelKind.EQUAL_WEIGHT.value,
+                ModelKind.IC_WEIGHT.value,
+                ModelKind.ICIR_WEIGHT.value,
+            }:
+                raise ValueError(
+                    "research-only Alpha is limited to equal/IC/ICIR weighted baselines"
+                )
+        elif admission is None or int(admission["production_core_count"]) < 8:
+            raise ValueError(
+                "formal L3 training requires an attested admission with at least "
+                "8 Production Alpha factors"
+            )
         dataset = np.load(args.dataset)
         features, target = dataset["X"], dataset["y"]
         groups = dataset.get("dates", None)
@@ -876,6 +893,8 @@ def train_alpha_model_main(argv: list[str] | None = None) -> int:
                 "folds": len(outcome.splits),
                 "oos_coverage": outcome.coverage,
                 "oos_rank_correlation": outcome.rank_correlation,
+                "lifecycle_status": ("RESEARCH_ONLY" if args.research_only else "FORMAL_BASELINE"),
+                "admission_hash": (admission["content_hash"] if admission is not None else None),
             }
         )
         return 0
