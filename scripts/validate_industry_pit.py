@@ -55,7 +55,11 @@ def main() -> int:
         )
     except (FileNotFoundError, KeyError, OSError, TypeError, ValueError) as exc:
         parser.error(str(exc))
-    destination = args.output_root / str(report["industry_release_id"])
+    destination = (
+        args.output_root
+        / str(report["industry_release_id"])
+        / f"{args.start_date:%Y%m%d}_{args.end_date:%Y%m%d}"
+    )
     destination.mkdir(parents=True, exist_ok=True)
     output = destination / "quality.json"
     temporary = output.with_name(f".{output.name}.{uuid4().hex}.tmp")

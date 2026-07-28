@@ -96,6 +96,7 @@ class StandardPITFactorLoader:
             FROM read_parquet(?) AS daily
             {" ".join(joins)}
             WHERE daily.trade_date BETWEEN ? AND ?
+              AND daily.exchange IN ('XSHG', 'XSHE')
             ORDER BY daily.trade_date, daily.ts_code
         """
         connection = duckdb.connect(":memory:")
@@ -108,6 +109,7 @@ class StandardPITFactorLoader:
                     SELECT DISTINCT trade_date
                     FROM read_parquet(?)
                     WHERE trade_date BETWEEN ? AND ?
+                      AND exchange IN ('XSHG', 'XSHE')
                     ORDER BY trade_date
                     """,
                     [daily_pattern, start_date, end_date],
@@ -120,6 +122,7 @@ class StandardPITFactorLoader:
                     SELECT DISTINCT ts_code
                     FROM read_parquet(?)
                     WHERE trade_date BETWEEN ? AND ?
+                      AND exchange IN ('XSHG', 'XSHE')
                     ORDER BY ts_code
                     """,
                     [daily_pattern, start_date, end_date],

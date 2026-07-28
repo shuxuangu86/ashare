@@ -84,6 +84,27 @@ def test_all_factor_cli_dry_runs_emit_machine_readable_status(
         assert json.loads(capsys.readouterr().out)["status"] == "DRY_RUN"
 
 
+def test_industry_neutral_evaluation_requires_attested_pit_release(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        evaluate_factors_main(
+            [
+                "--release-dir",
+                str(tmp_path),
+                "--data-release-id",
+                RELEASE,
+                "--factor-set",
+                "momentum_20d",
+                "--start-date",
+                "20260101",
+                "--end-date",
+                "20260131",
+                "--neutralization",
+                "industry_size",
+                "--dry-run",
+            ]
+        )
+
+
 def test_train_cli_uses_purged_walk_forward_and_writes_predictions(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -13,6 +13,7 @@ import pyarrow.parquet as pq  # type: ignore[import-untyped]
 from aquant.data.history.tushare import TushareHistoryCatalog
 from aquant.data.industry.models import IndustryClassification, IndustryMembershipRecord
 from aquant.data.industry.standardizer import standardize_industry_history
+from aquant.domain.data_release import DataReleaseId
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +49,7 @@ class IndustryPITPublisher:
         self._catalog = catalog
         self._root = standard_root
         self._release_id = release_id.strip()
-        self._data_release_id = data_release_id.strip()
+        self._data_release_id = str(DataReleaseId(data_release_id.strip()))
         self._trading_days = trading_days
         self._start = start_date
         self._end = end_date

@@ -41,6 +41,40 @@ uv run python scripts/admit_factors.py \
 Admission is deliberately non-forcing: fewer than eight passing factors produces
 `INSUFFICIENT_EVIDENCE`, never an automatically weakened gate.
 
+## PIT industry neutral evaluation
+
+Publish and validate industry data before requesting an industry view. The
+quality report must cover the complete evaluation range and attest the exact
+industry release hash; a blocked report is rejected by the evaluation CLI.
+
+```bash
+uv run python scripts/materialize_industry_pit.py \
+  --start-date 20211213 --end-date 20260717 \
+  --classification-system SW2021 --industry-level L1,L2,L3 \
+  --release-id sw2021_industry_pit_20260717_v2 \
+  --data-release-id cn_equity_20260717_001 \
+  --raw-state artifacts/tushare-backfill/state.sqlite3 \
+  --history-release-dir data/standard/history-release=cn_equity_history_20260717_001
+
+uv run python scripts/validate_industry_pit.py \
+  --industry-release data/standard/industry-release=sw2021_industry_pit_20260717_v2 \
+  --history-release data/standard/history-release=cn_equity_history_20260717_001 \
+  --start-date 20240101 --end-date 20260717
+
+uv run python scripts/evaluate_factors.py \
+  --release-dir data/standard/history-release=cn_equity_history_20260717_001 \
+  --data-release-id cn_equity_20260717_001 --factor-set baseline_v1 \
+  --start-date 20240101 --end-date 20260717 --horizons 1,5,10,20,40 \
+  --neutralization industry_size \
+  --industry-release data/standard/industry-release=sw2021_industry_pit_20260717_v2 \
+  --industry-quality-report \
+  artifacts/data_quality/industry_pit/sw2021_industry_pit_20260717_v2/20240101_20260717/quality.json
+```
+
+`--neutralization size` uses only same-day float market capitalization and does
+not require an industry release. Supported views are `raw`, `size`, `industry`
+and `industry_size`.
+
 ## Release gate
 
 ```bash

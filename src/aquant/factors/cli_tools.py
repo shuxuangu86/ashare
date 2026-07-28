@@ -4,11 +4,12 @@ import hashlib
 import json
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo
 
 import numpy as np
 
+from aquant.data.industry import IndustryPITRepository
 from aquant.domain.data_release import DataReleaseId
 from aquant.factors.aggregation import ModelKind, walk_forward_predict
 from aquant.factors.atomic import AtomicFactor, baseline_factor_library
@@ -29,6 +30,11 @@ from aquant.factors.feature_sets import (
 )
 from aquant.factors.generation import generate_window_variants
 from aquant.factors.materialization import FactorMaterializationEngine, MaterializationRequest
+from aquant.factors.preprocessing import (
+    load_pit_exposures,
+    load_size_exposures,
+    neutralize_pit_factor,
+)
 from aquant.factors.reporting import FactorReport, write_factor_report, write_feature_set_report
 from aquant.factors.selection import ConvergenceCache
 
@@ -110,6 +116,33 @@ def _evaluation_report_matches(
         return False
 
 
+def _verified_industry_quality(
+    path: Path,
+    *,
+    industry_repository: IndustryPITRepository,
+    data_release_id: str,
+    start_date: date,
+    end_date: date,
+) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    expected = payload.pop("content_hash", None)
+    payload.pop("created_at", None)
+    if expected != _hash(payload):
+        raise ValueError("industry quality report content hash mismatch")
+    if payload.get("status") != "PASS":
+        raise ValueError("neutral evaluation requires a passing industry quality report")
+    if payload.get("data_release_id") != data_release_id:
+        raise ValueError("industry quality data release does not match evaluation")
+    if payload.get("industry_release_hash") != industry_repository.content_hash:
+        raise ValueError("industry quality report does not attest the selected industry release")
+    if (
+        date.fromisoformat(payload["start_date"]) > start_date
+        or date.fromisoformat(payload["end_date"]) < end_date
+    ):
+        raise ValueError("industry quality report does not cover the evaluation range")
+    return {**payload, "content_hash": expected}
+
+
 def materialize_factors_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Materialize audited AQuant factors")
     parser.add_argument("--release-dir", type=Path, required=True)
@@ -189,6 +222,13 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--oos-fraction", type=float, default=0.2)
     parser.add_argument("--code-version", default="working-tree")
     parser.add_argument("--convergence-cache", type=Path)
+    parser.add_argument(
+        "--neutralization",
+        choices=("raw", "size", "industry", "industry_size"),
+        default="raw",
+    )
+    parser.add_argument("--industry-release", type=Path)
+    parser.add_argument("--industry-quality-report", type=Path)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -203,6 +243,21 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
             or not 0 < args.oos_fraction <= 0.5
         ):
             raise ValueError("evaluation horizons, costs, batch and OOS fraction are invalid")
+        industry_repository: IndustryPITRepository | None = None
+        industry_quality: dict[str, Any] | None = None
+        if args.neutralization in {"industry", "industry_size"}:
+            if args.industry_release is None or args.industry_quality_report is None:
+                raise ValueError(
+                    "neutral evaluation requires --industry-release and --industry-quality-report"
+                )
+            industry_repository = IndustryPITRepository(args.industry_release)
+            industry_quality = _verified_industry_quality(
+                args.industry_quality_report,
+                industry_repository=industry_repository,
+                data_release_id=str(args.data_release_id),
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
         if args.dry_run:
             _print({"status": "DRY_RUN", "factor_count": len(factors), "horizons": horizons})
             return 0
@@ -218,6 +273,13 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
             "horizons": horizons,
             "cost_bps": args.cost_bps,
             "oos_fraction": args.oos_fraction,
+            "neutralization": args.neutralization,
+            "industry_release_hash": (
+                industry_repository.content_hash if industry_repository is not None else None
+            ),
+            "industry_quality_hash": (
+                industry_quality["content_hash"] if industry_quality is not None else None
+            ),
         }
         config_hash = _hash(evaluation_config)
         convergence_cache: ConvergenceCache | None = None
@@ -275,6 +337,11 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                 universe_id=args.universe,
                 data_release_id=args.data_release_id,
             )
+            pit_exposures = None
+            if industry_repository is not None:
+                pit_exposures = load_pit_exposures(panel, industry_repository)
+            elif args.neutralization == "size":
+                pit_exposures = load_size_exposures(panel)
             labelled = {
                 horizon: pit_forward_return_labels(
                     panel.fields["close"],
@@ -304,6 +371,15 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                 )
             for factor in pending:
                 values = factor.compute_array(panel)
+                if pit_exposures is not None:
+                    values = neutralize_pit_factor(
+                        values,
+                        pit_exposures,
+                        method=cast(
+                            Literal["industry", "size", "industry_size"],
+                            args.neutralization,
+                        ),
+                    ).neutralized_value
                 if convergence_cache is not None:
                     convergence_cache.write(factor.spec.factor_id, values)
                 warmup = max(factor.spec.required_history - 1, 0)
@@ -372,6 +448,17 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                             "provenance": {
                                 "code_version": args.code_version,
                                 "config_hash": config_hash,
+                                "neutralization": args.neutralization,
+                                "industry_release_hash": (
+                                    industry_repository.content_hash
+                                    if industry_repository is not None
+                                    else None
+                                ),
+                                "industry_quality_hash": (
+                                    industry_quality["content_hash"]
+                                    if industry_quality is not None
+                                    else None
+                                ),
                             },
                         },
                     ),
@@ -396,7 +483,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                     },
                 )
                 del values, evaluations, oos_evaluations
-            del panel, labelled, exposures, regimes
+            del panel, labelled, exposures, regimes, pit_exposures
             gc.collect()
         convergence_content_hash = (
             convergence_cache.finalize() if convergence_cache is not None else None
