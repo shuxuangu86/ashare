@@ -24,14 +24,26 @@ def converge_cached_evaluation(
     output: Path,
     horizon: int = 5,
     maximum_distance: float = 0.5,
+    selection_fraction: float = 0.8,
 ) -> dict[str, object]:
     cache = ConvergenceCache(cache_root)
     metadata = json.loads(cache.metadata_path.read_text(encoding="utf-8"))
     if metadata["status"] != "PASS" or not metadata.get("content_hash"):
         raise ValueError("convergence cache must be finalized before selection")
-    labels = pit_forward_return_labels(cache.close, cache.trade_dates, horizon)[0]
+    if not 0.5 <= selection_fraction < 1:
+        raise ValueError("selection fraction must be in [0.5, 1)")
+    selection_end = int(len(cache.trade_dates) * selection_fraction)
+    if selection_end <= horizon or selection_end >= len(cache.trade_dates):
+        raise ValueError("convergence cache is too short for an isolated selection window")
+    selection_dates = cache.trade_dates[:selection_end]
+    labels = pit_forward_return_labels(
+        cache.close[:selection_end],
+        selection_dates,
+        horizon,
+    )[0]
     factor_values = {
-        factor_id: cache.values[index] for index, factor_id in enumerate(cache.factor_ids)
+        factor_id: cache.values[index, :selection_end]
+        for index, factor_id in enumerate(cache.factor_ids)
     }
     long_short: dict[str, npt.ArrayLike] = {}
     rank_ic: dict[str, npt.ArrayLike] = {}
@@ -41,19 +53,18 @@ def converge_cached_evaluation(
         report_path = _single_report(report_dir, factor_id)
         report = json.loads(report_path.read_text(encoding="utf-8"))
         report_hashes[factor_id] = str(report["content_hash"])
-        metrics = report["extra_metrics"]["oos_horizons"][str(horizon)]
-        quality = report["quality"]
         long_short[factor_id] = long_short_return_series(values, labels)
-        rank_ic[factor_id] = np.asarray(
-            information_coefficient(values, labels, rank=True).by_date,
-            dtype=float,
+        ranked = information_coefficient(values, labels, rank=True)
+        rank_values = np.asarray(ranked.by_date, dtype=np.float64)
+        rank_ic[factor_id] = rank_values
+        finite_rank = rank_values[np.isfinite(rank_values)]
+        rank_icir = (
+            float(np.mean(finite_rank) / np.std(finite_rank))
+            if len(finite_rank) > 1 and np.std(finite_rank) > 0
+            else 0.0
         )
-        scores[factor_id] = (
-            abs(float(metrics["rank_ic_mean"]))
-            * min(abs(float(metrics["rank_icir"])), 3)
-            * float(quality["coverage"])
-            * max(0.0, 1 - float(metrics["turnover"]))
-        )
+        coverage = float(np.count_nonzero(np.isfinite(values)) / values.size)
+        scores[factor_id] = abs(float(ranked.mean)) * min(abs(rank_icir), 3) * coverage
     result = converge_factors(
         factor_values,
         labels,
@@ -77,9 +88,18 @@ def converge_cached_evaluation(
         "report_content_hashes": report_hashes,
         "horizon": horizon,
         "maximum_distance": maximum_distance,
-        "score_definition": (
-            "OOS abs(RankIC)*min(OOS abs(RankICIR),3)*coverage*max(0,1-OOS turnover)"
-        ),
+        "selection_fraction": selection_fraction,
+        "selection_window": {
+            "start_date": selection_dates[0].isoformat(),
+            "end_date": selection_dates[-1].isoformat(),
+            "purpose": "feature_selection_only",
+        },
+        "holdout_window": {
+            "start_date": cache.trade_dates[selection_end].isoformat(),
+            "end_date": cache.trade_dates[-1].isoformat(),
+            "used_for_selection": False,
+        },
+        "score_definition": ("isolated-selection abs(RankIC)*min(abs(RankICIR),3)*coverage"),
         "factor_ids": result.factor_ids,
         "value_spearman": result.value_spearman.tolist(),
         "long_short_correlation": result.long_short_correlation.tolist(),

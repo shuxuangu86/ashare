@@ -15,6 +15,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--horizon", type=int, default=5)
     parser.add_argument("--maximum-distance", type=float, default=0.5)
+    parser.add_argument("--selection-fraction", type=float, default=0.8)
     args = parser.parse_args()
     try:
         payload = converge_cached_evaluation(
@@ -23,6 +24,7 @@ def main() -> int:
             output=args.output,
             horizon=args.horizon,
             maximum_distance=args.maximum_distance,
+            selection_fraction=args.selection_fraction,
         )
         print(
             json.dumps(

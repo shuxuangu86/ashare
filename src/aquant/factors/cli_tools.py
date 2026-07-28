@@ -233,6 +233,11 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--code-version", default="working-tree")
     parser.add_argument("--convergence-cache", type=Path)
     parser.add_argument(
+        "--reload-per-batch",
+        action="store_true",
+        help="trade I/O for lower retained memory; default loads all factor inputs once",
+    )
+    parser.add_argument(
         "--neutralization",
         choices=("raw", "size", "industry", "industry_size"),
         default="raw",
@@ -290,6 +295,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
             "industry_quality_hash": (
                 industry_quality["content_hash"] if industry_quality is not None else None
             ),
+            "reload_per_batch": args.reload_per_batch,
         }
         config_hash = _hash(evaluation_config)
         convergence_cache: ConvergenceCache | None = None
@@ -328,6 +334,30 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                     resumable.add(factor.spec.factor_id)
                     completed.append(factor.spec.factor_id)
                     reports.append((str(json_report), str(markdown_report)))
+        shared_panel = None
+        if not args.reload_per_batch:
+            shared_pending = tuple(
+                factor for factor in factors if factor.spec.factor_id not in resumable
+            )
+            if shared_pending:
+                shared_fields = tuple(
+                    sorted(
+                        {"close", "float_market_cap", "turnover_rate"}
+                        | {field for factor in shared_pending for field in factor.spec.input_fields}
+                    )
+                )
+                shared_panel = StandardPITFactorLoader(args.release_dir).load(
+                    fields=shared_fields,
+                    start_date=args.start_date,
+                    end_date=args.end_date,
+                    as_of_time=datetime.combine(
+                        args.end_date,
+                        datetime.max.time(),
+                        _SHANGHAI,
+                    ),
+                    universe_id=args.universe,
+                    data_release_id=args.data_release_id,
+                )
         for offset in range(0, len(factors), args.batch_size):
             batch = factors[offset : offset + args.batch_size]
             pending = tuple(factor for factor in batch if factor.spec.factor_id not in resumable)
@@ -339,14 +369,20 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                     | {field for factor in pending for field in factor.spec.input_fields}
                 )
             )
-            panel = StandardPITFactorLoader(args.release_dir).load(
-                fields=fields,
-                start_date=args.start_date,
-                end_date=args.end_date,
-                as_of_time=datetime.combine(args.end_date, datetime.max.time(), _SHANGHAI),
-                universe_id=args.universe,
-                data_release_id=args.data_release_id,
-            )
+            panel = shared_panel
+            if panel is None:
+                panel = StandardPITFactorLoader(args.release_dir).load(
+                    fields=fields,
+                    start_date=args.start_date,
+                    end_date=args.end_date,
+                    as_of_time=datetime.combine(
+                        args.end_date,
+                        datetime.max.time(),
+                        _SHANGHAI,
+                    ),
+                    universe_id=args.universe,
+                    data_release_id=args.data_release_id,
+                )
             pit_exposures = None
             if industry_repository is not None:
                 pit_exposures = load_pit_exposures(panel, industry_repository)
@@ -495,6 +531,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                 del values, evaluations, oos_evaluations
             del panel, labelled, exposures, regimes, pit_exposures
             gc.collect()
+        del shared_panel
         convergence_content_hash = (
             convergence_cache.finalize() if convergence_cache is not None else None
         )

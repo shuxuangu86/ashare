@@ -58,5 +58,8 @@ def test_cached_convergence_emits_audited_three_view_selection(tmp_path: Path) -
     assert payload["status"] == "REVIEW_REQUIRED"
     assert payload["compact_factor_count"] == 1
     assert payload["production_core_factor_ids"] == []
+    assert payload["selection_window"]["end_date"] == dates[23].isoformat()
+    assert payload["holdout_window"]["start_date"] == dates[24].isoformat()
+    assert payload["holdout_window"]["used_for_selection"] is False
     assert len(payload["content_hash"]) == 64
     assert output.is_file()
