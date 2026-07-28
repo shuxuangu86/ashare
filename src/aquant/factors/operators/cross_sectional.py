@@ -55,8 +55,12 @@ def cs_percentile(values: npt.ArrayLike) -> Array:
 
 def cs_demean(values: npt.ArrayLike) -> Array:
     rows, squeezed = _rows(values)
-    with np.errstate(all="ignore"):
-        result = rows - np.nanmean(np.where(np.isfinite(rows), rows, np.nan), axis=1)[:, None]
+    valid = np.isfinite(rows)
+    counts = np.count_nonzero(valid, axis=1)
+    sums = np.sum(np.where(valid, rows, 0.0), axis=1)
+    means = np.full(len(rows), np.nan)
+    np.divide(sums, counts, out=means, where=counts > 0)
+    result = rows - means[:, None]
     result[~np.isfinite(rows)] = np.nan
     return _restore(result, squeezed)
 

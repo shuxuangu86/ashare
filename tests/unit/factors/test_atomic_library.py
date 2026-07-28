@@ -5,7 +5,11 @@ import numpy as np
 import pytest
 
 from aquant.domain.data_release import DataReleaseId
-from aquant.factors.atomic import FactorPanelInput, baseline_factor_library
+from aquant.factors.atomic import (
+    FactorPanelInput,
+    baseline_factor_library,
+    second_wave_candidate_library,
+)
 from aquant.factors.types import FactorContext
 
 SUPPORTED_STANDARD_PIT_FIELDS = {
@@ -90,6 +94,46 @@ def test_future_input_changes_do_not_change_past_factor_values() -> None:
             equal_nan=True,
             err_msg=factor.spec.factor_id,
         )
+
+
+def test_second_wave_candidates_are_distinct_supported_and_auditable() -> None:
+    baseline_ids = {factor.spec.factor_id for factor in baseline_factor_library()}
+    candidates = second_wave_candidate_library()
+    assert len(candidates) == 28
+    assert not baseline_ids.intersection(factor.spec.factor_id for factor in candidates)
+    assert all(
+        set(factor.spec.input_fields) <= SUPPORTED_STANDARD_PIT_FIELDS for factor in candidates
+    )
+    assert all("second_wave_v1" in factor.spec.tags for factor in candidates)
+    assert all(factor.spec.parameters["missing_policy"] == "preserve" for factor in candidates)
+    assert all(factor.spec.parameters["pit_dependencies"] for factor in candidates)
+
+
+def test_second_wave_candidates_are_deterministic_unique_and_future_safe() -> None:
+    cutoff = 270
+    original = panel(cutoff=cutoff)
+    changed = panel(future_multiplier=1000, cutoff=cutoff)
+    outputs: dict[str, np.ndarray] = {}
+    for factor in second_wave_candidate_library():
+        first = factor.compute_array(original)
+        second = factor.compute_array(original)
+        np.testing.assert_allclose(first, second, equal_nan=True)
+        np.testing.assert_allclose(
+            first[:cutoff],
+            factor.compute_array(changed)[:cutoff],
+            equal_nan=True,
+            err_msg=factor.spec.factor_id,
+        )
+        assert np.count_nonzero(np.isfinite(first)) > 0
+        outputs[factor.spec.factor_id] = first
+    ids = tuple(outputs)
+    for left_index, left_id in enumerate(ids):
+        for right_id in ids[left_index + 1 :]:
+            left, right = outputs[left_id], outputs[right_id]
+            valid = np.isfinite(left) & np.isfinite(right)
+            assert not (np.count_nonzero(valid) and np.array_equal(left[valid], right[valid])), (
+                f"duplicate candidate outputs: {left_id}, {right_id}"
+            )
 
 
 @dataclass

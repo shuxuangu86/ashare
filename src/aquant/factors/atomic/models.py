@@ -92,6 +92,8 @@ def atomic_factor(
     expected_direction: int = 0,
     parameters: dict[str, object] | None = None,
     layer: FactorLayer = FactorLayer.L2A,
+    tags: tuple[str, ...] | None = None,
+    source_reference: str = "AQuant baseline factor library",
 ) -> AtomicFactor:
     spec = FactorSpec(
         factor_id=factor_id,
@@ -111,8 +113,8 @@ def atomic_factor(
         target_horizons=(1, 5, 10, 20, 60),
         parameters=parameters or {},
         source_type=SourceType.CODE,
-        source_reference="AQuant baseline factor library",
-        tags=(family, "baseline"),
+        source_reference=source_reference,
+        tags=tags or (family, "baseline"),
         complexity_score=float(len(input_fields) + len(parameters or {})),
     )
     return AtomicFactor(spec, calculator)

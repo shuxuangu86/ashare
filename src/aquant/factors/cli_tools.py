@@ -12,7 +12,11 @@ import numpy as np
 from aquant.data.industry import IndustryPITRepository
 from aquant.domain.data_release import DataReleaseId
 from aquant.factors.aggregation import ModelKind, walk_forward_predict
-from aquant.factors.atomic import AtomicFactor, baseline_factor_library
+from aquant.factors.atomic import (
+    AtomicFactor,
+    baseline_factor_library,
+    second_wave_candidate_library,
+)
 from aquant.factors.data_loader import StandardPITFactorLoader
 from aquant.factors.evaluation import (
     basic_style_exposures,
@@ -49,8 +53,14 @@ def parse_date(value: str) -> date:
 
 
 def selected_factors(value: str) -> tuple[AtomicFactor, ...]:
-    library = baseline_factor_library()
-    if value in {"baseline_v1", "all"}:
+    baseline = baseline_factor_library()
+    second_wave = second_wave_candidate_library()
+    library = (*baseline, *second_wave)
+    if value == "baseline_v1":
+        return baseline
+    if value == "second_wave_v1":
+        return second_wave
+    if value == "all":
         return library
     requested = tuple(item.strip() for item in value.split(",") if item.strip())
     by_id = {factor.spec.factor_id: factor for factor in library}
