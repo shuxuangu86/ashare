@@ -19,6 +19,28 @@ Before promotion, load `config/factors/production_gate_v1.yaml`, preserve its ha
 the evidence hash, and require a passing hard gate. Threshold changes require a new
 versioned configuration, never an edit to an already published research artifact.
 
+```bash
+uv run python scripts/converge_factors.py \
+  --cache-root artifacts/convergence/five_year_v2 \
+  --report-dir reports/institutional-5y-audited-v2 \
+  --output artifacts/convergence/five_year_v2.json --horizon 5
+
+uv run python scripts/attest_factor_leakage.py \
+  --data-release-id cn_equity_20260717_001 --code-version <evaluated-revision> \
+  --output artifacts/admission/leakage.json
+
+uv run python scripts/admit_factors.py \
+  --convergence artifacts/convergence/five_year_v2.json \
+  --report-dir reports/institutional-5y-audited-v2 \
+  --evaluation-manifest reports/institutional-5y-audited-v2/evaluation_manifest.json \
+  --gate-config config/factors/production_gate_v1.yaml \
+  --leakage-attestation artifacts/admission/leakage.json \
+  --output artifacts/admission/five_year_v2.json
+```
+
+Admission is deliberately non-forcing: fewer than eight passing factors produces
+`INSUFFICIENT_EVIDENCE`, never an automatically weakened gate.
+
 ## Release gate
 
 ```bash

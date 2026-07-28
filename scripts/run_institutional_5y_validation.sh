@@ -24,6 +24,7 @@ mkdir -p "$report_dir"
   --end-date 20260717 \
   --horizons 1,5,10,20,40 \
   --batch-size 73 \
+  --resume \
   --code-version "$code_version" \
   --convergence-cache "$cache_dir" \
   > "$report_dir/command.json" \

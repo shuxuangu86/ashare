@@ -8,7 +8,8 @@
 - Institutional IC, Newey-West, grouping, cost, drawdown, regime and exposure metrics.
 - Three-source redundancy convergence with residual-information checks.
 - Versioned configurable production gates and lifecycle evidence hashes.
-- PIT-validated raw, industry-neutral and industry-plus-size-neutral variants.
+- PIT-validated neutralization operators and exposure contracts; real industry
+  neutralization remains blocked until a historical industry-membership feed is released.
 - Reproducible performance scenarios with resource and cache metrics.
 - Immutable feature-set specifications and purged walk-forward L3 baselines.
 
@@ -30,5 +31,8 @@ Factor Store size is zero unless a materialization benchmark is requested.
 - The current release exposes implemented cash and stock dividends. Rights issues,
   split/reverse-split and delisting event feeds are not yet connected.
 - Event alpha data is not connected and no event factors are synthesized.
+- The current Standard release has daily PIT float market cap, but `stock_basic`
+  intentionally contains no historical industry membership. Consequently
+  `baseline_neutral_v1` may be published only as `DRAFT`, not promoted.
 - No factor may enter `PRODUCTION` until the long-history evaluation, convergence,
   neutralized re-evaluation and configured gate all pass on a pinned data release.

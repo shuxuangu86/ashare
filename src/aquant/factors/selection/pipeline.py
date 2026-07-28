@@ -41,7 +41,7 @@ def converge_cached_evaluation(
         report_path = _single_report(report_dir, factor_id)
         report = json.loads(report_path.read_text(encoding="utf-8"))
         report_hashes[factor_id] = str(report["content_hash"])
-        metrics = report["extra_metrics"]["horizons"][str(horizon)]
+        metrics = report["extra_metrics"]["oos_horizons"][str(horizon)]
         quality = report["quality"]
         long_short[factor_id] = long_short_return_series(values, labels)
         rank_ic[factor_id] = np.asarray(
@@ -77,7 +77,9 @@ def converge_cached_evaluation(
         "report_content_hashes": report_hashes,
         "horizon": horizon,
         "maximum_distance": maximum_distance,
-        "score_definition": ("abs(RankIC)*min(abs(RankICIR),3)*coverage*max(0,1-turnover)"),
+        "score_definition": (
+            "OOS abs(RankIC)*min(OOS abs(RankICIR),3)*coverage*max(0,1-OOS turnover)"
+        ),
         "factor_ids": result.factor_ids,
         "value_spearman": result.value_spearman.tolist(),
         "long_short_correlation": result.long_short_correlation.tolist(),

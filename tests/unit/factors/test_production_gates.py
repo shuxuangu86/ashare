@@ -64,6 +64,14 @@ def test_configured_gate_scores_components_and_hard_vetoes() -> None:
     assert not redundant.passed
     assert "REDUNDANCY_FAILURE" in redundant.rejections
 
+    wrong_direction = evaluate_production_gate(
+        _passing_evidence(oos_rank_ic=-0.03, rank_icir=-0.4),
+        config,
+    )
+    assert not wrong_direction.passed
+    assert "OOS_RANK_IC_FAILURE" in wrong_direction.rejections
+    assert "RANK_ICIR_FAILURE" in wrong_direction.rejections
+
     non_finite = evaluate_production_gate(
         _passing_evidence(oos_rank_ic=float("nan")),
         config,

@@ -133,38 +133,38 @@ def evaluate_production_gate(
         "INSUFFICIENT_HISTORY": evidence.history_years >= config.minimum_history_years,
         "INSUFFICIENT_CROSS_SECTIONS": (evidence.cross_sections >= config.minimum_cross_sections),
         "EXCESSIVE_MISSINGNESS": evidence.missing_rate <= config.maximum_missing_rate,
-        "OOS_RANK_IC_FAILURE": (abs(evidence.oos_rank_ic) >= config.minimum_oos_rank_ic_abs),
-        "RANK_ICIR_FAILURE": abs(evidence.rank_icir) >= config.minimum_rank_icir_abs,
+        "OOS_RANK_IC_FAILURE": evidence.oos_rank_ic >= config.minimum_oos_rank_ic_abs,
+        "RANK_ICIR_FAILURE": evidence.rank_icir >= config.minimum_rank_icir_abs,
         "IC_WIN_RATE_FAILURE": (
             evidence.directional_ic_win_rate >= config.minimum_directional_ic_win_rate
         ),
         "YEAR_STABILITY_FAILURE": (
             evidence.positive_year_ratio >= config.minimum_positive_year_ratio
         ),
-        "MONOTONICITY_FAILURE": (abs(evidence.monotonicity) >= config.minimum_monotonicity_abs),
+        "MONOTONICITY_FAILURE": evidence.monotonicity >= config.minimum_monotonicity_abs,
         "TURNOVER_FAILURE": evidence.turnover <= config.maximum_turnover,
         "COST_ADJUSTED_RETURN_FAILURE": (
             evidence.directional_net_return >= config.minimum_directional_net_return
         ),
         "REDUNDANCY_FAILURE": (
             evidence.maximum_peer_correlation <= config.maximum_peer_correlation
-            or abs(evidence.conditional_rank_ic) >= config.minimum_conditional_rank_ic_abs
+            or evidence.conditional_rank_ic >= config.minimum_conditional_rank_ic_abs
         ),
         "COMPLEXITY_FAILURE": evidence.complexity <= config.maximum_complexity,
         "STYLE_EXPOSURE_FAILURE": (
             evidence.maximum_style_exposure <= config.maximum_style_exposure_abs
         ),
         "EXTREME_REGIME_FAILURE": (
-            abs(evidence.extreme_regime_rank_ic) >= config.minimum_extreme_regime_rank_ic_abs
+            evidence.extreme_regime_rank_ic >= config.minimum_extreme_regime_rank_ic_abs
         ),
     }
     components = {
         "coverage": max(0.0, 1 - _finite(evidence.missing_rate, 1.0)),
-        "predictive": abs(_finite(evidence.oos_rank_ic, 0.0)),
+        "predictive": max(0.0, _finite(evidence.oos_rank_ic, 0.0)),
         "stability": (
             _finite(evidence.directional_ic_win_rate, 0.0)
             + _finite(evidence.positive_year_ratio, 0.0)
-            + abs(_finite(evidence.extreme_regime_rank_ic, 0.0))
+            + max(0.0, _finite(evidence.extreme_regime_rank_ic, 0.0))
         )
         / 3,
         "tradability": max(0.0, 1 - _finite(evidence.turnover, 1.0)),

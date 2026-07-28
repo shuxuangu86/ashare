@@ -546,7 +546,9 @@ def build_baseline_feature_sets_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
-        selection = json.loads(args.selection.read_text(encoding="utf-8"))
+        selection = _verified_selection(args.selection)
+        if selection.get("status") != "PASS":
+            raise ValueError("feature sets require a passing convergence selection")
         release_in_selection = selection.get("data_release_id")
         if release_in_selection and release_in_selection != str(args.data_release_id):
             raise ValueError("selection data release does not match requested release")
@@ -593,6 +595,20 @@ def build_baseline_feature_sets_main(argv: list[str] | None = None) -> int:
         parser.error(str(exc))
 
 
+def _verified_selection(path: Path) -> dict[str, Any]:
+    selection = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(selection, dict):
+        raise ValueError("selection must be a JSON object")
+    expected = selection.pop("content_hash", None)
+    actual = hashlib.sha256(
+        json.dumps(selection, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if expected != actual:
+        raise ValueError("selection content hash mismatch")
+    selection["content_hash"] = expected
+    return selection
+
+
 def train_alpha_model_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Train an ordered L3 alpha baseline")
     parser.add_argument("--feature-set-id", required=True)
@@ -622,8 +638,10 @@ def train_alpha_model_main(argv: list[str] | None = None) -> int:
     try:
         dataset = np.load(args.dataset)
         features, target = dataset["X"], dataset["y"]
-        train_size = args.train_size or int(len(target) * 0.6)
-        validation_size = args.validation_size or max(1, int(len(target) * 0.2))
+        groups = dataset.get("dates", None)
+        period_count = len(np.unique(groups)) if groups is not None else len(target)
+        train_size = args.train_size or int(period_count * 0.6)
+        validation_size = args.validation_size or max(1, int(period_count * 0.2))
         step = args.step or validation_size
         outcome = walk_forward_predict(
             ModelKind(args.model),
@@ -633,6 +651,7 @@ def train_alpha_model_main(argv: list[str] | None = None) -> int:
             validation_size=validation_size,
             step=step,
             purge=args.target_horizon,
+            groups=groups,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         np.save(args.output, outcome.predictions)

@@ -36,7 +36,7 @@ def test_cached_convergence_emits_audited_three_view_selection(tmp_path: Path) -
                 "cn_equity_20260717_001",
                 quality=evaluate_quality(values),
                 extra_metrics={
-                    "horizons": {
+                    "oos_horizons": {
                         "5": {
                             "rank_ic_mean": 0.02 + index / 100,
                             "rank_icir": 0.2 + index / 10,

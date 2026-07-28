@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -120,15 +121,16 @@ def test_baseline_bundle_cli_publishes_three_immutable_specs(
 ) -> None:
     selection = tmp_path / "selection.json"
     compact = [factor.spec.factor_id for factor in baseline_factor_library()[:20]]
-    selection.write_text(
-        json.dumps(
-            {
-                "experiment_id": "five_year_convergence_v1",
-                "data_release_id": RELEASE,
-                "compact_factor_ids": compact,
-            }
-        )
-    )
+    selection_payload = {
+        "status": "PASS",
+        "experiment_id": "five_year_convergence_v1",
+        "data_release_id": RELEASE,
+        "compact_factor_ids": compact,
+    }
+    selection_payload["content_hash"] = hashlib.sha256(
+        json.dumps(selection_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    selection.write_text(json.dumps(selection_payload))
     output = tmp_path / "sets"
     assert (
         build_baseline_feature_sets_main(
@@ -154,6 +156,32 @@ def test_baseline_bundle_cli_publishes_three_immutable_specs(
     }
     assert len(tuple(output.glob("*.json"))) == 3
     assert "Content hash:" in (output / "baseline_neutral_v1-1.0.0.md").read_text()
+
+
+def test_baseline_bundle_cli_rejects_tampered_selection(tmp_path: Path) -> None:
+    selection = tmp_path / "selection.json"
+    selection.write_text(
+        json.dumps(
+            {
+                "status": "PASS",
+                "experiment_id": "tampered",
+                "data_release_id": RELEASE,
+                "compact_factor_ids": [],
+                "content_hash": "0" * 64,
+            }
+        )
+    )
+    with pytest.raises(SystemExit):
+        build_baseline_feature_sets_main(
+            [
+                "--selection",
+                str(selection),
+                "--data-release-id",
+                RELEASE,
+                "--effective-from",
+                "20260717",
+            ]
+        )
 
 
 def test_factor_report_writes_json_and_markdown(tmp_path: Path) -> None:
