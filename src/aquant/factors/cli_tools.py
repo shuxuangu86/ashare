@@ -28,8 +28,10 @@ from aquant.factors.evaluation.ic import information_coefficient
 from aquant.factors.evaluation.quality import evaluate_quality
 from aquant.factors.feature_sets import (
     FactorMember,
+    FeatureRole,
     FeatureSetRegistry,
     FeatureSetSpec,
+    FeatureSetStatus,
     build_baseline_feature_sets,
 )
 from aquant.factors.generation import generate_window_variants
@@ -671,6 +673,8 @@ def build_baseline_feature_sets_main(argv: list[str] | None = None) -> int:
         description="Publish raw, compact and PIT-neutral baseline feature sets"
     )
     parser.add_argument("--selection", type=Path, required=True)
+    parser.add_argument("--admission", type=Path)
+    parser.add_argument("--industry-quality-report", type=Path)
     parser.add_argument("--data-release-id", type=_release, required=True)
     parser.add_argument("--effective-from", type=parse_date, required=True)
     parser.add_argument("--target-horizon", type=int, default=20)
@@ -688,8 +692,66 @@ def build_baseline_feature_sets_main(argv: list[str] | None = None) -> int:
             raise ValueError("selection data release does not match requested release")
         compact_ids = tuple(selection["compact_factor_ids"])
         experiment_id = str(selection["experiment_id"])
+        admission = _verified_selection(args.admission) if args.admission is not None else None
+        if admission is not None and admission.get("data_release_id") != str(args.data_release_id):
+            raise ValueError("admission data release does not match requested release")
+        industry_quality = (
+            _verified_stable_payload(
+                args.industry_quality_report,
+                volatile_fields=("created_at",),
+            )
+            if args.industry_quality_report is not None
+            else None
+        )
+        if industry_quality is not None and industry_quality.get("data_release_id") != str(
+            args.data_release_id
+        ):
+            raise ValueError("industry quality data release does not match requested release")
+        roles: dict[str, FeatureRole] = {}
+        if admission is not None:
+            for item in admission["factors"]:
+                role = str(item["feature_role"])
+                roles[str(item["factor_id"])] = {
+                    "ALPHA_CANDIDATE": FeatureRole.ALPHA_CANDIDATE,
+                    "RISK_FACTOR": FeatureRole.RISK_CONTROL,
+                    "CONTROL_FEATURE": FeatureRole.CONTROL_FEATURE,
+                    "EXPECTED_DIRECTION_UNKNOWN": FeatureRole.CONTROL_FEATURE,
+                }[role]
+        selection_window = selection.get("selection_window")
+        evaluation_window = (
+            (
+                date.fromisoformat(selection_window["start_date"]),
+                date.fromisoformat(selection_window["end_date"]),
+            )
+            if selection_window
+            else None
+        )
+        lineage = tuple(
+            (name, value)
+            for name, value in (
+                ("selection_hash", str(selection["content_hash"])),
+                (
+                    "admission_hash",
+                    str(admission["content_hash"]) if admission is not None else "",
+                ),
+                (
+                    "industry_quality_hash",
+                    str(industry_quality["content_hash"]) if industry_quality is not None else "",
+                ),
+            )
+            if value
+        )
+        neutral_validated = bool(
+            industry_quality is not None
+            and industry_quality.get("status") == "PASS"
+            and admission is not None
+            and selection.get("holdout_window", {}).get("used_for_selection") is False
+        )
         bundle = build_baseline_feature_sets(
-            tuple(factor.spec for factor in baseline_factor_library()),
+            tuple(
+                factor.spec
+                for factor in (*baseline_factor_library(), *second_wave_candidate_library())
+            ),
             compact_ids,
             data_release_id=args.data_release_id,
             effective_from=args.effective_from,
@@ -697,6 +759,13 @@ def build_baseline_feature_sets_main(argv: list[str] | None = None) -> int:
             target_horizon=args.target_horizon,
             training_window_days=args.training_window_days,
             code_version=args.code_version,
+            compact_status=FeatureSetStatus.VALIDATED,
+            neutral_status=(
+                FeatureSetStatus.VALIDATED if neutral_validated else FeatureSetStatus.DRAFT
+            ),
+            evaluation_window=evaluation_window,
+            feature_roles=roles,
+            lineage=lineage,
         )
         specs = (bundle.raw, bundle.compact, bundle.neutral)
         if args.dry_run:
@@ -730,12 +799,23 @@ def build_baseline_feature_sets_main(argv: list[str] | None = None) -> int:
 
 
 def _verified_selection(path: Path) -> dict[str, Any]:
+    return _verified_stable_payload(path)
+
+
+def _verified_stable_payload(
+    path: Path,
+    *,
+    volatile_fields: tuple[str, ...] = (),
+) -> dict[str, Any]:
     selection = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(selection, dict):
         raise ValueError("selection must be a JSON object")
     expected = selection.pop("content_hash", None)
+    stable = dict(selection)
+    for field in volatile_fields:
+        stable.pop(field, None)
     actual = hashlib.sha256(
-        json.dumps(selection, sort_keys=True, separators=(",", ":")).encode()
+        json.dumps(stable, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
     if expected != actual:
         raise ValueError("selection content hash mismatch")

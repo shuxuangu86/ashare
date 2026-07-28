@@ -3,11 +3,17 @@ from aquant.factors.feature_sets.baselines import (
     build_baseline_feature_sets,
 )
 from aquant.factors.feature_sets.registry import FeatureSetRegistry
-from aquant.factors.feature_sets.spec import FactorMember, FeatureSetSpec, FeatureSetStatus
+from aquant.factors.feature_sets.spec import (
+    FactorMember,
+    FeatureRole,
+    FeatureSetSpec,
+    FeatureSetStatus,
+)
 
 __all__ = [
     "BaselineFeatureSets",
     "FactorMember",
+    "FeatureRole",
     "FeatureSetRegistry",
     "FeatureSetSpec",
     "FeatureSetStatus",

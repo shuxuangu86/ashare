@@ -4,7 +4,11 @@ import pytest
 
 from aquant.domain.data_release import DataReleaseId
 from aquant.factors.atomic import baseline_factor_library
-from aquant.factors.feature_sets import build_baseline_feature_sets
+from aquant.factors.feature_sets import (
+    FeatureRole,
+    FeatureSetStatus,
+    build_baseline_feature_sets,
+)
 
 
 def test_baseline_feature_sets_pin_members_and_processing() -> None:
@@ -23,6 +27,17 @@ def test_baseline_feature_sets_pin_members_and_processing() -> None:
     assert result.neutral.factor_members == result.compact.factor_members
     assert result.raw.neutralization == ()
     assert result.neutral.neutralization == ("pit_industry", "log_float_market_cap")
+    assert result.raw.status == FeatureSetStatus.DRAFT
+    assert result.compact.status == FeatureSetStatus.VALIDATED
+    assert result.neutral.status == FeatureSetStatus.DRAFT
+    assert (
+        next(
+            member
+            for member in result.raw.factor_members
+            if member.factor_id == "log_total_market_cap"
+        ).role
+        == FeatureRole.RISK_CONTROL
+    )
     assert len({item.content_hash for item in (result.raw, result.compact, result.neutral)}) == 3
 
 

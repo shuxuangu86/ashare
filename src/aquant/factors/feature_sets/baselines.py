@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from datetime import date
 
 from aquant.domain.data_release import DataReleaseId
-from aquant.factors.feature_sets.spec import FactorMember, FeatureSetSpec
+from aquant.factors.feature_sets.spec import (
+    FactorMember,
+    FeatureRole,
+    FeatureSetSpec,
+    FeatureSetStatus,
+)
 from aquant.factors.spec import FactorSpec
 
 
@@ -25,6 +30,11 @@ def build_baseline_feature_sets(
     target_horizon: int = 20,
     training_window_days: int = 1260,
     code_version: str = "working-tree",
+    compact_status: FeatureSetStatus = FeatureSetStatus.VALIDATED,
+    neutral_status: FeatureSetStatus = FeatureSetStatus.DRAFT,
+    evaluation_window: tuple[date, date] | None = None,
+    feature_roles: dict[str, FeatureRole] | None = None,
+    lineage: tuple[tuple[str, str], ...] = (),
 ) -> BaselineFeatureSets:
     """Build the three pinned baselines after evidence-based convergence."""
     if len(compact_factor_ids) < 15 or len(compact_factor_ids) > 25:
@@ -38,8 +48,15 @@ def build_baseline_feature_sets(
     if len(set(compact_factor_ids)) != len(compact_factor_ids):
         raise ValueError("compact baseline must not contain duplicate factor ids")
 
-    all_members = _members(tuple(by_id[factor_id] for factor_id in sorted(by_id)))
-    compact_members = _members(tuple(by_id[factor_id] for factor_id in sorted(compact_factor_ids)))
+    resolved_roles = feature_roles or {}
+    all_members = _members(
+        tuple(by_id[factor_id] for factor_id in sorted(by_id)),
+        resolved_roles,
+    )
+    compact_members = _members(
+        tuple(by_id[factor_id] for factor_id in sorted(compact_factor_ids)),
+        resolved_roles,
+    )
     common = {
         "version": "1.0.0",
         "target_horizon": target_horizon,
@@ -49,9 +66,11 @@ def build_baseline_feature_sets(
         "effective_from": effective_from,
         "training_window_days": training_window_days,
         "code_version": code_version,
-        "status": "DRAFT",
+        "status": FeatureSetStatus.DRAFT,
         "winsorization_method": "mad_5",
         "missing_value_strategy": "preserve",
+        "evaluation_window": evaluation_window,
+        "lineage": lineage,
     }
     raw = _spec(
         feature_set_id="baseline_raw_v1",
@@ -69,7 +88,7 @@ def build_baseline_feature_sets(
         selection_method="three_correlation_convergence",
         standardization="cross_sectional_zscore",
         neutralization=(),
-        common=common,
+        common={**common, "status": compact_status},
     )
     neutral = _spec(
         feature_set_id="baseline_neutral_v1",
@@ -78,16 +97,31 @@ def build_baseline_feature_sets(
         selection_method="three_correlation_convergence",
         standardization="cross_sectional_zscore",
         neutralization=("pit_industry", "log_float_market_cap"),
-        common=common,
+        common={**common, "status": neutral_status},
     )
     return BaselineFeatureSets(raw, compact, neutral)
 
 
-def _members(factors: tuple[FactorSpec, ...]) -> tuple[FactorMember, ...]:
+def _members(
+    factors: tuple[FactorSpec, ...],
+    feature_roles: dict[str, FeatureRole],
+) -> tuple[FactorMember, ...]:
     return tuple(
-        FactorMember(factor_id=factor.factor_id, factor_version=factor.version)
+        FactorMember(
+            factor_id=factor.factor_id,
+            factor_version=factor.version,
+            role=feature_roles.get(factor.factor_id, _default_role(factor)),
+        )
         for factor in factors
     )
+
+
+def _default_role(factor: FactorSpec) -> FeatureRole:
+    if factor.family in {"size", "microcap_risk"}:
+        return FeatureRole.RISK_CONTROL
+    if factor.expected_direction == 0:
+        return FeatureRole.CONTROL_FEATURE
+    return FeatureRole.ALPHA_CANDIDATE
 
 
 def _spec(

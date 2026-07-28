@@ -19,7 +19,11 @@ from aquant.factors.reporting import FactorReport, write_factor_report
 def test_admission_uses_directional_oos_evidence_and_does_not_force_core(
     tmp_path: Path,
 ) -> None:
-    factors = baseline_factor_library()[:2]
+    library = baseline_factor_library()
+    factors = (
+        next(factor for factor in library if factor.spec.factor_id == "net_profit_growth_yoy"),
+        next(factor for factor in library if factor.spec.factor_id == "momentum_20d"),
+    )
     reports = tmp_path / "reports"
     report_hashes: dict[str, str] = {}
     convergence_factors: list[dict[str, object]] = []
@@ -108,6 +112,8 @@ def test_admission_uses_directional_oos_evidence_and_does_not_force_core(
     assert payload["production_core_count"] == 1
     assert payload["factors"][0]["decision"]["passed"]
     assert payload["factors"][1]["decision"]["rejections"] == ("MISSING_EXPECTED_DIRECTION",)
+    assert (tmp_path / "admission_summary.md").is_file()
+    assert (tmp_path / "factor_level_decisions.parquet").is_file()
 
 
 def test_leakage_attestation_rejects_tampering(tmp_path: Path) -> None:
