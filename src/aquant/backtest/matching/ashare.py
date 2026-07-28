@@ -1,12 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import ROUND_FLOOR, Decimal
 from uuid import UUID
 
 from aquant.backtest.costs import AshareFeeModel, AshareFeeSchedule
 from aquant.backtest.matching.orders import BacktestOrder, Fill
+from aquant.backtest.matching.tradability import TradabilityRules, evaluate_tradability
 from aquant.domain.enums import Side
-from aquant.domain.market_data import DailyBar, LimitStatus, SecurityStatus
+from aquant.domain.market_data import DailyBar, SecurityStatus
 from aquant.domain.time import require_aware
 
 
@@ -17,6 +18,7 @@ class AshareExecutionRules:
     slippage_bps: Decimal = Decimal("5")
     require_security_status: bool = True
     use_prior_20d_average_volume: bool = False
+    tradability: TradabilityRules = field(default_factory=TradabilityRules)
 
     def __post_init__(self) -> None:
         if self.lot_size <= 0:
@@ -61,12 +63,14 @@ class AshareOpenMatcher:
             raise ValueError("market state symbol does not match order")
         if timestamp <= order.submitted_at:
             raise ValueError("next-open match must occur after order submission")
-        if self._rules.require_security_status and status is None:
-            return None
-        if status is not None and (
-            status.suspended
-            or (order.side is Side.BUY and status.limit_status is LimitStatus.LIMIT_UP)
-            or (order.side is Side.SELL and status.limit_status is LimitStatus.LIMIT_DOWN)
+        if (
+            self._rules.require_security_status
+            and not evaluate_tradability(
+                side=order.side,
+                bar=bar,
+                status=status,
+                rules=self._rules.tradability,
+            ).allowed
         ):
             return None
 

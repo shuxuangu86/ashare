@@ -1,6 +1,7 @@
 from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
 import duckdb
@@ -11,6 +12,7 @@ from aquant.data.history.tushare import (
     HistoryDatasetManifest,
     HistoryReleaseManifest,
 )
+from aquant.domain.corporate_actions import CorporateAction, CorporateActionKind
 from aquant.domain.market_data import DailyBar, LimitStatus, SecurityStatus
 from aquant.strategies.microcap.models import MicrocapObservation, MicrocapSnapshot
 
@@ -46,6 +48,9 @@ class HistoryReleaseReader:
         missing = set(datasets) - set(self._datasets)
         if missing:
             raise ValueError(f"history release is missing datasets: {sorted(missing)}")
+
+    def has_dataset(self, dataset: str) -> bool:
+        return dataset in self._datasets
 
     def parquet_pattern(self, dataset: str) -> str:
         try:
@@ -97,6 +102,7 @@ class DuckDBMicrocapHistory:
             "namechange",
             "suspend_d",
             "fina_indicator",
+            "daily",
         )
         rows = self._connection.execute(
             """
@@ -132,10 +138,48 @@ class DuckDBMicrocapHistory:
                 )
                 WHERE row_number = 1
             ),
-            suspended AS (
+            suspension_events AS (
                 SELECT DISTINCT ts_code
                 FROM read_parquet(?)
                 WHERE trade_date = ?
+            ),
+            traded AS (
+                SELECT DISTINCT ts_code
+                FROM read_parquet(?)
+                WHERE trade_date = ?
+            ),
+            suspended AS (
+                SELECT suspension_events.ts_code
+                FROM suspension_events
+                LEFT JOIN traded USING (ts_code)
+                WHERE traded.ts_code IS NULL
+            ),
+            current_basic AS (
+                SELECT *
+                FROM read_parquet(?)
+                WHERE trade_date = ?
+            ),
+            carried_suspended AS (
+                SELECT history.*
+                FROM suspended
+                JOIN LATERAL (
+                    SELECT *
+                    FROM read_parquet(?) AS candidate
+                    WHERE candidate.ts_code = suspended.ts_code
+                      AND candidate.trade_date < ?
+                    ORDER BY candidate.trade_date DESC
+                    LIMIT 1
+                ) AS history ON TRUE
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM current_basic
+                    WHERE current_basic.ts_code = suspended.ts_code
+                )
+            ),
+            basic_asof AS (
+                SELECT * FROM current_basic
+                UNION ALL
+                SELECT * FROM carried_suspended
             )
             SELECT
                 basic.ts_code,
@@ -149,12 +193,11 @@ class DuckDBMicrocapHistory:
                 basic.turnover_volatility_20d,
                 suspended.ts_code IS NOT NULL AS suspended,
                 historical_name.name
-            FROM read_parquet(?) AS basic
+            FROM basic_asof AS basic
             JOIN read_parquet(?) AS instrument USING (ts_code)
             LEFT JOIN historical_name USING (ts_code)
             LEFT JOIN latest_financial AS financial USING (ts_code)
             LEFT JOIN suspended USING (ts_code)
-            WHERE basic.trade_date = ?
             ORDER BY basic.ts_code
             """,
             [
@@ -165,9 +208,13 @@ class DuckDBMicrocapHistory:
                 trade_date,
                 self.release.parquet_pattern("suspend_d"),
                 trade_date,
-                self.release.parquet_pattern("daily_basic"),
-                self.release.parquet_pattern("stock_basic"),
+                self.release.parquet_pattern("daily"),
                 trade_date,
+                self.release.parquet_pattern("daily_basic"),
+                trade_date,
+                self.release.parquet_pattern("daily_basic"),
+                trade_date,
+                self.release.parquet_pattern("stock_basic"),
             ],
         ).fetchall()
         if not rows:
@@ -295,7 +342,7 @@ class DuckDBMicrocapHistory:
                 SecurityStatus(
                     symbol=symbol,
                     trade_date=trade_date,
-                    suspended=bool(row[11]),
+                    suspended=False,
                     is_st=_unsafe_historical_name(row[12]) or _is_st(row[12]),
                     limit_status=_limit_status(opening, up_limit, down_limit),
                     prior_20d_average_volume=_optional_decimal(row[8]),
@@ -304,6 +351,7 @@ class DuckDBMicrocapHistory:
         dates = sorted(grouped_bars)
         if not dates:
             raise ValueError("history release has no bars in the requested smoke window")
+        grouped_actions = self.corporate_actions(start_date, end_date)
         return tuple(
             MarketSession(
                 trade_date=value,
@@ -311,9 +359,92 @@ class DuckDBMicrocapHistory:
                 close_at=datetime.combine(value, time(15, 0), _SHANGHAI),
                 bars=tuple(grouped_bars[value]),
                 statuses=tuple(grouped_statuses[value]),
+                corporate_actions=grouped_actions.get(value, ()),
             )
             for value in dates
         )
+
+    def corporate_actions(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> dict[date, tuple[CorporateAction, ...]]:
+        if not self.release.has_dataset("dividend"):
+            return {}
+        rows = self._connection.execute(
+            """
+            SELECT DISTINCT
+                ts_code,
+                stk_div,
+                cash_div_tax,
+                ex_date,
+                pay_date
+            FROM read_parquet(?)
+            WHERE div_proc = '实施'
+              AND (
+                    (ex_date BETWEEN ? AND ?)
+                 OR (pay_date BETWEEN ? AND ?)
+              )
+            ORDER BY coalesce(ex_date, pay_date), ts_code
+            """,
+            [
+                self.release.parquet_pattern("dividend"),
+                start_date,
+                end_date,
+                start_date,
+                end_date,
+            ],
+        ).fetchall()
+        grouped: dict[date, list[CorporateAction]] = {}
+        for ts_code, stock_ratio, cash_per_share, ex_date, pay_date in rows:
+            symbol = parse_tushare_symbol(ts_code)
+            identity = f"{ts_code}:{ex_date}:{pay_date}:{stock_ratio}:{cash_per_share}"
+            entitlement_id = uuid5(NAMESPACE_URL, f"aquant:dividend:{identity}:cash")
+            if ex_date is not None and start_date <= ex_date <= end_date:
+                occurred_at = datetime.combine(ex_date, time(9, 30), _SHANGHAI)
+                cash = _optional_decimal(cash_per_share)
+                stock = _optional_decimal(stock_ratio)
+                if cash is not None and cash > 0:
+                    grouped.setdefault(ex_date, []).append(
+                        CorporateAction(
+                            entitlement_id,
+                            symbol,
+                            CorporateActionKind.CASH_DIVIDEND_ENTITLEMENT,
+                            occurred_at,
+                            cash_per_share=cash,
+                        )
+                    )
+                if stock is not None and stock > 0:
+                    grouped.setdefault(ex_date, []).append(
+                        CorporateAction(
+                            uuid5(NAMESPACE_URL, f"aquant:dividend:{identity}:stock"),
+                            symbol,
+                            CorporateActionKind.STOCK_DIVIDEND,
+                            occurred_at,
+                            ratio=stock,
+                        )
+                    )
+            if (
+                pay_date is not None
+                and cash_per_share is not None
+                and Decimal(cash_per_share) > 0
+                and start_date <= pay_date <= end_date
+            ):
+                grouped.setdefault(pay_date, []).append(
+                    CorporateAction(
+                        uuid5(NAMESPACE_URL, f"aquant:dividend:{identity}:payment"),
+                        symbol,
+                        CorporateActionKind.CASH_DIVIDEND_PAYMENT,
+                        datetime.combine(pay_date, time(9, 30), _SHANGHAI),
+                        reference_action_id=entitlement_id,
+                    )
+                )
+        return {
+            trade_date: tuple(
+                sorted(actions, key=lambda item: (item.occurred_at, str(item.action_id)))
+            )
+            for trade_date, actions in grouped.items()
+        }
 
 
 def _decimal(value: object) -> Decimal:

@@ -901,7 +901,9 @@ def test_history_reader_enforces_fundamental_lag_and_builds_sessions(
     observation = snapshot.observations[0]
     assert observation.net_profit_yoy == 12
     assert observation.debt_to_assets == 40
-    assert observation.suspended
+    # A suspend/resume event can coexist with valid daily bars.  A valid bar is
+    # definitive evidence that the security was not suspended for the full day.
+    assert not observation.suspended
     assert not observation.is_st
-    assert sessions[0].statuses[0].suspended
+    assert not sessions[0].statuses[0].suspended
     assert sessions[0].bars[0].volume == 10_000

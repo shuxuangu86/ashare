@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 *.py[cod]
+*.orig
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -14,14 +15,17 @@ htmlcov/
 
 # Runtime data and state
 data/raw/**
+data/standard/**
 data/standardized/**
 data/point_in_time/**
 data/factors/**
+data/factors-smoke/**
 data/backtests/**
 data/quarantine/**
 !data/**/.gitkeep
 logs/**
 artifacts/**
+reports/**
 
 # Local service volumes and credentials
 .docker-data/
@@ -32,4 +36,3 @@ config/secrets*.yaml
 
 # Notebook outputs
 .ipynb_checkpoints/
-

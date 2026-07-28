@@ -77,7 +77,7 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "status": "SMOKE_ONLY_UNADJUSTED_RETURNS_NOT_RESEARCH_RESULT",
+                "status": "SMOKE_ONLY_CORPORATE_ACTION_LEDGER_ENABLED",
                 "run_id": spec.run_id,
                 "sessions": len(sessions),
                 "observations_first_session": len(snapshots[session_dates[0]].observations),
@@ -86,8 +86,8 @@ def main() -> int:
                 "total_return": str(outcome.metrics.total_return),
                 "max_drawdown": str(outcome.metrics.max_drawdown),
                 "warning": (
-                    "This command validates data/PIT/execution wiring only. "
-                    "Do not use its return metrics until corporate actions are ledger-applied."
+                    "This command validates data/PIT/execution/accounting wiring only; "
+                    "it is not a research performance result."
                 ),
             },
             ensure_ascii=False,

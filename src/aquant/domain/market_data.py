@@ -68,8 +68,15 @@ class SecurityStatus:
     is_st: bool
     limit_status: LimitStatus = LimitStatus.UNKNOWN
     prior_20d_average_volume: Decimal | None = None
+    is_listed: bool = True
+    is_delisted: bool = False
+    listing_age_days: int | None = None
 
     def __post_init__(self) -> None:
+        if self.is_delisted and self.is_listed:
+            raise ValueError("delisted security cannot be marked listed")
+        if self.listing_age_days is not None and self.listing_age_days < 0:
+            raise ValueError("listing age cannot be negative")
         if self.prior_20d_average_volume is None:
             return
         volume = Decimal(self.prior_20d_average_volume)

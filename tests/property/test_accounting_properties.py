@@ -7,6 +7,7 @@ from hypothesis import strategies as st
 
 from aquant.backtest.accounting import PortfolioLedger
 from aquant.backtest.matching import Fill
+from aquant.domain.corporate_actions import CorporateAction, CorporateActionKind
 from aquant.domain.enums import Side
 from aquant.domain.identifiers import Symbol
 
@@ -63,3 +64,44 @@ def test_cash_and_position_are_exactly_explained_by_fills(
     assert ledger.cash == expected_cash
     assert ledger.position(SYMBOL).quantity == buy_quantity - sell_quantity
     assert PortfolioLedger.rebuild(initial_cash, ledger.fills).state_hash == ledger.state_hash
+
+
+@given(
+    quantity=st.integers(min_value=1, max_value=10_000),
+    price=st.integers(min_value=1, max_value=1_000),
+    split=st.integers(min_value=1, max_value=10),
+)
+def test_whole_share_splits_preserve_equity(
+    quantity: int,
+    price: int,
+    split: int,
+) -> None:
+    initial_cash = Decimal(quantity * price)
+    ledger = PortfolioLedger(initial_cash)
+    ledger.apply_fill(
+        Fill(
+            UUID(int=11),
+            UUID(int=111),
+            SYMBOL,
+            Side.BUY,
+            quantity,
+            Decimal(price),
+            Decimal("0"),
+            START,
+        )
+    )
+    before = ledger.snapshot(asof_time=START, prices={SYMBOL: Decimal(price)})
+    action = CorporateAction(
+        UUID(int=12),
+        SYMBOL,
+        CorporateActionKind.SPLIT,
+        START + timedelta(days=1),
+        ratio=Decimal(split),
+    )
+    ledger.apply_corporate_action(action)
+    after = ledger.snapshot(
+        asof_time=action.occurred_at,
+        prices={SYMBOL: Decimal(price) / Decimal(split)},
+    )
+    assert abs(after.equity - before.equity) <= Decimal("1e-20")
+    assert after.positions[0].quantity == quantity * split

@@ -5,6 +5,8 @@ import numpy as np
 import numpy.typing as npt
 
 from aquant.factors.definitions.dsl import Expression
+from aquant.factors.operators.math import safe_div, signed_power
+from aquant.factors.operators.time_series import argmax, argmin, decay_linear
 
 Array: TypeAlias = npt.NDArray[np.float64]
 
@@ -40,6 +42,11 @@ class ExpressionEvaluator:
 
     def _evaluate(self, expression: Expression, panel: FactorPanel) -> Array:
         op = expression.operator
+        op = {
+            "Delay": "Ref",
+            "Rank": "RankCS",
+            "TsRank": "RankTS",
+        }.get(op, op)
         if op == "Field":
             field = str(expression.arguments[0])
             try:
@@ -61,6 +68,29 @@ class ExpressionEvaluator:
             return np.abs(args[0])
         if op == "Sign":
             return np.sign(args[0])
+        if op == "SignedPower":
+            exponent = expression.arguments[1]
+            if not isinstance(exponent, int | float):
+                raise TypeError("signed-power exponent must be numeric")
+            return signed_power(args[0], float(exponent))
+        if op in {"Greater", "GreaterEqual", "Less", "LessEqual", "Equal", "NotEqual"}:
+            return self._comparison(op, args[0], args[1])
+        if op == "Where":
+            return np.where(np.isfinite(args[0]), np.where(args[0] != 0, args[1], args[2]), np.nan)
+        if op == "Return":
+            shifted = self._shift(args[0], self._window(expression))
+            return safe_div(args[0], shifted) - 1
+        if op == "DecayLinear":
+            return decay_linear(args[0], self._window(expression))
+        if op == "ArgMax":
+            return argmax(args[0], self._window(expression))
+        if op == "ArgMin":
+            return argmin(args[0], self._window(expression))
+        if op == "Scale":
+            scale = expression.arguments[1] if len(expression.arguments) == 2 else 1.0
+            if not isinstance(scale, int | float):
+                raise TypeError("scale target must be numeric")
+            return self._scale(args[0], float(scale))
         if op in {"Ref", "Delta"}:
             window = self._window(expression)
             shifted = self._shift(args[0], window)
@@ -78,6 +108,29 @@ class ExpressionEvaluator:
         if op == "Neutralize":
             return self._neutralize(args[0], args[1])
         raise ValueError(f"unsupported factor operator: {op}")
+
+    @staticmethod
+    def _comparison(op: str, left: Array, right: Array) -> Array:
+        operations = {
+            "Greater": np.greater,
+            "GreaterEqual": np.greater_equal,
+            "Less": np.less,
+            "LessEqual": np.less_equal,
+            "Equal": np.equal,
+            "NotEqual": np.not_equal,
+        }
+        valid = np.isfinite(left) & np.isfinite(right)
+        return np.where(valid, operations[op](left, right).astype(float), np.nan)
+
+    @staticmethod
+    def _scale(values: Array, target: float) -> Array:
+        result = np.full(values.shape, np.nan)
+        for row_number, row in enumerate(values):
+            valid = np.isfinite(row)
+            denominator = np.sum(np.abs(row[valid]))
+            if denominator > 0:
+                result[row_number, valid] = row[valid] * target / denominator
+        return result
 
     @staticmethod
     def _arithmetic(op: str, left: Array, right: Array) -> Array:

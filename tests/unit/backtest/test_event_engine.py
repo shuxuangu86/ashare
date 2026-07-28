@@ -83,6 +83,42 @@ def test_end_to_end_next_open_backtest_and_accounting() -> None:
     assert len(result.final_state_hash) == 64
 
 
+def test_missing_bar_carries_forward_last_mark_without_creating_a_fill() -> None:
+    other = Symbol.parse("000001.XSHE")
+    day17 = date(2026, 7, 17)
+    other_bar = DailyBar(
+        other,
+        day17,
+        Decimal("5"),
+        Decimal("5"),
+        Decimal("5"),
+        Decimal("5"),
+        Decimal("100"),
+        Decimal("500"),
+    )
+    sessions = (
+        SESSIONS[0],
+        SESSIONS[1],
+        MarketSession(
+            day17,
+            datetime(2026, 7, 17, 1, 30, tzinfo=UTC),
+            datetime(2026, 7, 17, 7, tzinfo=UTC),
+            (other_bar,),
+        ),
+    )
+
+    result = EventDrivenBacktest(run_id="stale-mark", initial_cash=Decimal("10000")).run(
+        sessions, BuyThenSell()
+    )
+
+    assert [snapshot.equity for snapshot in result.equity_curve] == [
+        Decimal("10000"),
+        Decimal("10100"),
+        Decimal("10100"),
+    ]
+    assert len(result.fills) == 1
+
+
 def test_same_inputs_produce_identical_orders_fills_and_result_hash() -> None:
     first = EventDrivenBacktest(run_id="repeatable", initial_cash=Decimal("10000")).run(
         SESSIONS, BuyThenSell()

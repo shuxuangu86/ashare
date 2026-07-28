@@ -3,6 +3,7 @@ from datetime import date, datetime
 from enum import IntEnum, StrEnum
 from typing import Protocol
 
+from aquant.domain.corporate_actions import CorporateAction
 from aquant.domain.time import require_aware
 
 
@@ -11,6 +12,7 @@ class EventKind(StrEnum):
     ORDER_SUBMITTED = "ORDER_SUBMITTED"
     FILL = "FILL"
     SESSION_CLOSE = "SESSION_CLOSE"
+    CORPORATE_ACTION = "CORPORATE_ACTION"
 
 
 class EventPriority(IntEnum):
@@ -54,3 +56,13 @@ class SessionCloseEvent:
             "occurred_at",
             require_aware(self.occurred_at, field_name="occurred_at"),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class CorporateActionAppliedEvent:
+    action: CorporateAction
+    kind: EventKind = field(default=EventKind.CORPORATE_ACTION, init=False)
+
+    @property
+    def occurred_at(self) -> datetime:
+        return self.action.occurred_at

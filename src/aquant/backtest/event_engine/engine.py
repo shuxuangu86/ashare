@@ -11,6 +11,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from aquant.backtest.accounting import PortfolioLedger, PortfolioSnapshot
 from aquant.backtest.event_engine.events import (
     BacktestEvent,
+    CorporateActionAppliedEvent,
     EventPriority,
     SessionCloseEvent,
     SessionOpenEvent,
@@ -25,6 +26,7 @@ from aquant.backtest.matching import (
     OrderRequest,
     OrderSubmittedEvent,
 )
+from aquant.domain.corporate_actions import CorporateAction
 from aquant.domain.enums import Side
 from aquant.domain.identifiers import Symbol
 from aquant.domain.market_data import DailyBar, SecurityStatus
@@ -38,6 +40,7 @@ class MarketSession:
     close_at: datetime
     bars: tuple[DailyBar, ...]
     statuses: tuple[SecurityStatus, ...] = ()
+    corporate_actions: tuple[CorporateAction, ...] = ()
 
     def __post_init__(self) -> None:
         opened = require_aware(self.open_at, field_name="open_at")
@@ -54,6 +57,11 @@ class MarketSession:
             status.trade_date != self.trade_date for status in self.statuses
         ):
             raise ValueError("market session security statuses are invalid")
+        action_ids = [action.action_id for action in self.corporate_actions]
+        if len(action_ids) != len(set(action_ids)) or any(
+            action.occurred_at.date() != self.trade_date for action in self.corporate_actions
+        ):
+            raise ValueError("market session corporate actions are invalid")
         object.__setattr__(self, "open_at", opened)
         object.__setattr__(self, "close_at", closed)
 
@@ -87,6 +95,7 @@ class BacktestResult:
     fills: tuple[Fill, ...]
     equity_curve: tuple[PortfolioSnapshot, ...]
     final_state_hash: str
+    corporate_actions: tuple[CorporateAction, ...] = ()
 
 
 SessionEvent = SessionOpenEvent | SessionCloseEvent
@@ -148,6 +157,7 @@ class EventDrivenBacktest:
         equity_curve: list[PortfolioSnapshot] = []
         order_sequence = 0
         fill_sequence = 0
+        last_prices: dict[Symbol, Decimal] = {}
 
         while queue:
             scheduled = queue.pop()
@@ -157,6 +167,12 @@ class EventDrivenBacktest:
             if isinstance(event, SessionOpenEvent):
                 bars = session.bar_by_symbol()
                 statuses = session.status_by_symbol()
+                for action in sorted(
+                    session.corporate_actions,
+                    key=lambda item: (item.occurred_at, str(item.action_id)),
+                ):
+                    ledger.apply_corporate_action(action)
+                    events.append(CorporateActionAppliedEvent(action))
                 for order in order_book.eligible_orders(event.occurred_at):
                     bar = bars.get(order.symbol)
                     if bar is None:
@@ -189,8 +205,8 @@ class EventDrivenBacktest:
                         order_book.cancel(order.order_id)
                 continue
 
-            prices = {bar.symbol: bar.close for bar in session.bars}
-            snapshot = ledger.snapshot(asof_time=event.occurred_at, prices=prices)
+            last_prices.update((bar.symbol, bar.close) for bar in session.bars)
+            snapshot = ledger.snapshot(asof_time=event.occurred_at, prices=last_prices)
             equity_curve.append(snapshot)
             context = StrategyContext(session, snapshot)
             for request in strategy.on_close(context):
@@ -213,6 +229,7 @@ class EventDrivenBacktest:
             ledger.fills,
             tuple(equity_curve),
             final_hash,
+            ledger.corporate_actions,
         )
 
     def _identifier(self, kind: str, sequence: int) -> UUID:
