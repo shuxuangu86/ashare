@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -53,7 +54,7 @@ def converge_factors(
         or set(scores) != set(factor_ids)
     ):
         raise ValueError("convergence inputs must contain the same factors")
-    arrays = {key: np.asarray(value, dtype=float) for key, value in factor_values.items()}
+    arrays = {key: np.asarray(value, dtype=np.float32) for key, value in factor_values.items()}
     shapes = {value.shape for value in arrays.values()}
     returns = np.asarray(forward_returns, dtype=float)
     if len(shapes) != 1 or next(iter(shapes)) != returns.shape or returns.ndim != 2:
@@ -117,10 +118,12 @@ def converge_factors(
     )
 
 
-def cross_sectional_spearman(factor_values: dict[str, Array]) -> Array:
+def cross_sectional_spearman(factor_values: Mapping[str, npt.ArrayLike]) -> Array:
     """Average daily Spearman correlation after ranking each available cross-section."""
     factor_ids = tuple(sorted(factor_values))
-    arrays = tuple(np.asarray(factor_values[factor_id], dtype=float) for factor_id in factor_ids)
+    arrays = tuple(
+        np.asarray(factor_values[factor_id], dtype=np.float32) for factor_id in factor_ids
+    )
     if not arrays or len({array.shape for array in arrays}) != 1 or arrays[0].ndim != 2:
         raise ValueError("factor values must be aligned time-by-security matrices")
     factor_count = len(factor_ids)
@@ -172,8 +175,17 @@ def _series_correlation(
     return result
 
 
-def _cross_sectional_residuals(candidate: Array, representative: Array) -> Array:
-    result = np.full(candidate.shape, np.nan)
-    for index, (left, right) in enumerate(zip(candidate, representative, strict=True)):
+def _cross_sectional_residuals(
+    candidate: npt.ArrayLike,
+    representative: npt.ArrayLike,
+) -> Array:
+    candidate_values = np.asarray(candidate)
+    representative_values = np.asarray(representative)
+    if candidate_values.shape != representative_values.shape or candidate_values.ndim != 2:
+        raise ValueError("residual factor matrices must align")
+    result = np.full(candidate_values.shape, np.nan)
+    for index, (left, right) in enumerate(
+        zip(candidate_values, representative_values, strict=True)
+    ):
         result[index] = residual_information(left, right)
     return result
