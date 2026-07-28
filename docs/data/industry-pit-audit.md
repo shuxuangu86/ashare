@@ -79,6 +79,23 @@ never overwrites an existing verified release.
 
 ## Audit status
 
-`IMPLEMENTATION_REQUIRED`: genuine historical source data exists, but SW2014
-must be archived and the Standard/PIT industry publisher and loader must be
-implemented before `baseline_neutral_v1` can leave `DRAFT`.
+`PARTIAL / EXTERNAL ACCESS BLOCKED`: the Standard/PIT schema, standardizer,
+repository, atomic publisher, validation CLI and resumable ingestion CLI are
+implemented. A real SW2021-only release was published as
+`sw2021_industry_pit_20260717_v1`.
+
+The SW2014 fetch was attempted on 2026-07-29 and Tushare returned error 2002
+(`token expired`). The resumable failure record is
+`artifacts/industry-backfill/sw2014-industry-backfill-20260729-v1/report.json`.
+AKShare's documented Shenwan endpoints expose current/latest constituents, not
+complete removal history or historical announcement timestamps; BaoStock does
+not provide a verified equivalent interval feed. Neither is a PIT-safe
+substitute.
+
+The SW2021 quality run covers 96.22% of Shanghai/Shenzhen market rows overall
+with no overlaps, invalid intervals, or orphan codes. It remains `BLOCKED`
+because annual coverage is only 91.72%, 90.61%, and 92.14% in 2021, 2022, and
+2023 respectively; the dominant gap is early STAR Market history. Coverage is
+above 99.9% from 2024 onward. No threshold was relaxed. SW2014 history and the
+early SW2021 source gap must be resolved before five-year neutral evaluation or
+promotion of `baseline_neutral_v1`.
