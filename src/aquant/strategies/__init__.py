@@ -26,6 +26,14 @@ from aquant.strategies.microcap import (
     matcher_for_cost_scenario,
     render_microcap_matrix_report,
 )
+from aquant.strategies.single_factor import (
+    SingleFactorConfig,
+    SingleFactorEqualWeightStrategy,
+    SingleFactorObservation,
+    SingleFactorSelection,
+    SingleFactorSelector,
+    SingleFactorSnapshot,
+)
 
 __all__ = [
     "PROTOTYPE_DEFINITIONS",
@@ -46,6 +54,12 @@ __all__ = [
     "MicrocapSnapshot",
     "MicrocapUniverseConfig",
     "RebalanceFrequency",
+    "SingleFactorConfig",
+    "SingleFactorEqualWeightStrategy",
+    "SingleFactorObservation",
+    "SingleFactorSelection",
+    "SingleFactorSelector",
+    "SingleFactorSnapshot",
     "build_experiment_matrix",
     "generate_rebalance_dates",
     "matcher_for_cost_scenario",

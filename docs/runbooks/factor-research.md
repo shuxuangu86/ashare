@@ -125,3 +125,26 @@ TUSHARE_ENDPOINT=tinyshare://pro
 `TUSHARE_TOKEN` carries the TinyShare authorization code. Never place it in a
 tracked configuration file or command log. The adapter preserves AQuant's
 existing immutable Raw envelope, checkpoint and manifest contracts.
+
+## Single-factor L4 chain smoke
+
+Only factors explicitly marked `PRODUCTION` in an attested admission artifact
+may enter this command. It is still research-only until a production feature
+set and portfolio policy are approved.
+
+```bash
+uv run python scripts/run_single_factor_l4_backtest.py \
+  --history-release data/standard/history-release=cn_equity_history_20260717_001 \
+  --factor-materialization data/factors/materialization=<materialization-id> \
+  --admission artifacts/admission/<run>/admission_summary.json \
+  --factor-id amount_concentration_20d \
+  --start-date 20260601 \
+  --end-date 20260717 \
+  --target-count 50 \
+  --frequency weekly \
+  --cost-scenario base-cost
+```
+
+The command verifies materialized partition hashes, uses the factor's declared
+direction, ranks at T close, trades at T+1 open and writes deterministic
+JSON/Markdown evidence under `artifacts/l4_single_factor/`.

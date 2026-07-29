@@ -1,4 +1,4 @@
-.PHONY: bootstrap lock test quality format config-check infra-config infra-up infra-down tushare-backfill tushare-status tushare-daily-close tushare-daily-morning tushare-daily-status tushare-history-materialize microcap-history-smoke
+.PHONY: bootstrap lock test quality format config-check infra-config infra-up infra-down tushare-backfill tushare-status tushare-daily-close tushare-daily-morning tushare-daily-status tushare-history-materialize microcap-history-smoke single-factor-l4-smoke
 
 HISTORY_END_DATE ?= 20260717
 HISTORY_RELEASE_ID ?= cn_equity_history_20260717_001
@@ -66,5 +66,13 @@ tushare-history-materialize:
 microcap-history-smoke:
 	uv run --extra data python -u scripts/run_microcap_history_smoke.py \
 		--release-dir data/standard/history-release=$(HISTORY_RELEASE_ID) \
+		--start-date $(SMOKE_START_DATE) \
+		--end-date $(SMOKE_END_DATE)
+
+single-factor-l4-smoke:
+	uv run --extra data python -u scripts/run_single_factor_l4_backtest.py \
+		--history-release data/standard/history-release=$(HISTORY_RELEASE_ID) \
+		--factor-materialization $(FACTOR_MATERIALIZATION) \
+		--admission $(FACTOR_ADMISSION) \
 		--start-date $(SMOKE_START_DATE) \
 		--end-date $(SMOKE_END_DATE)

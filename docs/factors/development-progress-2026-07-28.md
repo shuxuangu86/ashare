@@ -130,3 +130,25 @@ deliberately excluded from Git.
   checks passed, and mypy passed for 211 source files.
 - Real event/accounting smoke passed 34 sessions, 2,416 orders and 2,414 fills
   in 17.67 seconds with 1,155,308 KiB peak RSS. It remains wiring evidence only.
+
+### Single-factor L4 chain validation
+
+- Added a verified materialized-factor reader and a generic PIT single-factor
+  selector/execution strategy. The reader checks the immutable manifest,
+  partition hashes, factor version, data release, valid rows and unique keys.
+- Ran admitted `amount_concentration_20d@1.0.0` as a negative-direction,
+  50-stock equal-weight portfolio with weekly T-close signals and T+1-open
+  execution. Base costs include fees, 5 bps slippage, board lots and 0.5%
+  volume participation; the existing limit, status and corporate-action ledger
+  remain active.
+- Real-data run `2026-06-01` through `2026-07-17`: 34 sessions, six
+  rebalances, 491 orders/fills, 97.08% quantity fill rate, 7.2623 gross
+  turnover and RMB 38,491.09 fees. T+1 attestation passed.
+- Total return was -11.10% and maximum drawdown was 11.14%. This is a chain
+  validation result, not evidence that a one-factor portfolio is deployable.
+- Two identical runs produced content hash
+  `c2ed845d489969865964648458f227f395c2144b2ecdf7221f7f1a835f14a6fc`
+  and final-state hash
+  `0fcee19f33f2d948200bc19088b1223981a469a63e932c33d9ac327845f29c23`.
+- Final gate: 648 tests passed, 88.33% coverage, Ruff/format passed and mypy
+  passed for 213 source files.
