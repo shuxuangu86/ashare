@@ -148,3 +148,21 @@ uv run python scripts/run_single_factor_l4_backtest.py \
 The command verifies materialized partition hashes, uses the factor's declared
 direction, ranks at T close, trades at T+1 open and writes deterministic
 JSON/Markdown evidence under `artifacts/l4_single_factor/`.
+
+For a full-market best/worst quintile comparison against CSI All Share:
+
+```bash
+uv run python scripts/compare_single_factor_quantiles.py \
+  --history-release data/standard/history-release=cn_equity_history_20260717_001 \
+  --factor-materialization data/factors/materialization=<materialization-id> \
+  --admission artifacts/admission/<run>/admission_summary.json \
+  --start-date 20260101 \
+  --end-date 20260717 \
+  --target-fraction 0.2 \
+  --frequency weekly \
+  --cost-scenario base-cost
+```
+
+The latest common verified date across history, factor materialization and
+benchmark must be used. Monthly turnover is filled notional divided by
+month-opening equity; friction is fees plus modeled execution slippage.

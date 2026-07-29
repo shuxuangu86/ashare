@@ -152,3 +152,27 @@ deliberately excluded from Git.
   `0fcee19f33f2d948200bc19088b1223981a469a63e932c33d9ac327845f29c23`.
 - Final gate: 648 tests passed, 88.33% coverage, Ruff/format passed and mypy
   passed for 213 source files.
+
+### Full-market factor-quintile L4 comparison
+
+- Added direction-aware fractional selection and compared the admitted
+  `amount_concentration_20d` best/worst 20% tails over all eligible Shanghai
+  and Shenzhen A shares. Weekly T-close/T+1-open execution used RMB 1 billion
+  per portfolio and the unchanged base-cost matcher.
+- Real-data period `2026-01-01` through the latest common verified date
+  `2026-07-17`: 129 sessions, 26 rebalances, 660,924 factor rows and 4,929
+  eligible names at the first rebalance; each tail selected 985 names.
+- Best-direction 20% returned -9.04% after costs; worst-direction 20% returned
+  -20.55%; CSI All Share (`000985.CSI`) returned -4.18%. The factor spread was
+  +11.51 percentage points, while the best tail lagged the benchmark by 4.87
+  points. This remains `PASS_RESEARCH_ONLY`.
+- Monthly JSON/Markdown output includes net return, filled-notional turnover,
+  fees, modeled slippage and total friction. Artifact hash:
+  `9f84f263a18549406bb86484ef4c7e53c4e9221888321eadad05ad902157f9d5`.
+- The broad-universe run exposed fractional stock-dividend accounting without
+  a cash-in-lieu reference. The loader now uses the ex-date unadjusted open,
+  falling back only to the last prior visible close when that bar is absent;
+  all 288 real 2026 stock-dividend records now have a reference price.
+- Runtime was 1:59.47 with 2,760,436 KiB peak RSS.
+- Final gate: 653 tests passed with 88.42% coverage; Ruff and format passed,
+  and mypy passed for 214 source files.

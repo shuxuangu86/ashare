@@ -9,6 +9,7 @@ from aquant.domain.enums import Exchange
 from aquant.domain.identifiers import Symbol
 from aquant.domain.market_data import DailyBar, LimitStatus, SecurityStatus
 from aquant.strategies import (
+    SelectionTail,
     SingleFactorConfig,
     SingleFactorEqualWeightStrategy,
     SingleFactorObservation,
@@ -95,6 +96,38 @@ def test_negative_direction_selects_low_value_and_fills_t_plus_one() -> None:
     assert len(result.fills) == 1
     assert result.fills[0].symbol == SYMBOLS[0]
     assert result.fills[0].occurred_at == _session(17).open_at
+
+
+def test_fractional_best_and_worst_tails_are_direction_aware() -> None:
+    trade_date = date(2026, 7, 16)
+    asof = datetime(2026, 7, 16, 11, 30, tzinfo=UTC)
+    observations = tuple(
+        SingleFactorObservation(
+            Symbol(f"{index:06d}", Exchange.XSHE),
+            trade_date,
+            asof,
+            date(2020, 1, 1),
+            float(index),
+            False,
+            False,
+            False,
+        )
+        for index in range(1, 11)
+    )
+    snapshot = SingleFactorSnapshot(trade_date, asof, observations)
+    base = {
+        "factor_id": "amount_concentration_20d",
+        "factor_version": "1.0.0",
+        "expected_direction": -1,
+        "target_fraction": Decimal("0.2"),
+        "minimum_constituents": 10,
+    }
+    best = SingleFactorSelector(SingleFactorConfig(**base)).select(snapshot)
+    worst = SingleFactorSelector(
+        SingleFactorConfig(**base, selection_tail=SelectionTail.WORST)
+    ).select(snapshot)
+    assert best.symbols == tuple(item.symbol for item in observations[:2])
+    assert worst.symbols == tuple(item.symbol for item in reversed(observations[-2:]))
 
 
 def test_selector_excludes_missing_and_nontradable_observations() -> None:
@@ -221,6 +254,7 @@ def test_non_rebalance_st_position_is_exited_at_next_open() -> None:
         {"factor_id": ""},
         {"expected_direction": 0},
         {"target_count": 0},
+        {"target_fraction": Decimal("1")},
         {"minimum_listing_days": -1},
         {"lot_size": 0},
         {"cash_buffer_weight": Decimal("1")},

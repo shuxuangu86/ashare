@@ -26,7 +26,14 @@ from aquant.strategies.microcap import (
     matcher_for_cost_scenario,
     render_microcap_matrix_report,
 )
+from aquant.strategies.quantile_report import (
+    MonthlyBenchmarkResult,
+    MonthlyPortfolioResult,
+    monthly_benchmark_results,
+    monthly_portfolio_results,
+)
 from aquant.strategies.single_factor import (
+    SelectionTail,
     SingleFactorConfig,
     SingleFactorEqualWeightStrategy,
     SingleFactorObservation,
@@ -53,7 +60,10 @@ __all__ = [
     "MicrocapSelector",
     "MicrocapSnapshot",
     "MicrocapUniverseConfig",
+    "MonthlyBenchmarkResult",
+    "MonthlyPortfolioResult",
     "RebalanceFrequency",
+    "SelectionTail",
     "SingleFactorConfig",
     "SingleFactorEqualWeightStrategy",
     "SingleFactorObservation",
@@ -63,5 +73,7 @@ __all__ = [
     "build_experiment_matrix",
     "generate_rebalance_dates",
     "matcher_for_cost_scenario",
+    "monthly_benchmark_results",
+    "monthly_portfolio_results",
     "render_microcap_matrix_report",
 ]

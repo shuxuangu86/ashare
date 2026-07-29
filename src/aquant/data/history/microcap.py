@@ -374,21 +374,35 @@ class DuckDBMicrocapHistory:
         rows = self._connection.execute(
             """
             SELECT DISTINCT
-                ts_code,
-                stk_div,
-                cash_div_tax,
-                ex_date,
-                pay_date
-            FROM read_parquet(?)
+                dividend.ts_code,
+                dividend.stk_div,
+                dividend.cash_div_tax,
+                dividend.ex_date,
+                dividend.pay_date,
+                coalesce(bar.open, prior.close) AS cash_in_lieu_reference
+            FROM read_parquet(?) AS dividend
+            LEFT JOIN read_parquet(?) AS bar
+              ON bar.ts_code = dividend.ts_code
+             AND bar.trade_date = dividend.ex_date
+            LEFT JOIN LATERAL (
+                SELECT prior_bar.close
+                FROM read_parquet(?) AS prior_bar
+                WHERE prior_bar.ts_code = dividend.ts_code
+                  AND prior_bar.trade_date < dividend.ex_date
+                ORDER BY prior_bar.trade_date DESC
+                LIMIT 1
+            ) AS prior ON true
             WHERE div_proc = '实施'
               AND (
-                    (ex_date BETWEEN ? AND ?)
-                 OR (pay_date BETWEEN ? AND ?)
+                    (dividend.ex_date BETWEEN ? AND ?)
+                 OR (dividend.pay_date BETWEEN ? AND ?)
               )
-            ORDER BY coalesce(ex_date, pay_date), ts_code
+            ORDER BY coalesce(dividend.ex_date, dividend.pay_date), dividend.ts_code
             """,
             [
                 self.release.parquet_pattern("dividend"),
+                self.release.parquet_pattern("daily"),
+                self.release.parquet_pattern("daily"),
                 start_date,
                 end_date,
                 start_date,
@@ -396,7 +410,7 @@ class DuckDBMicrocapHistory:
             ],
         ).fetchall()
         grouped: dict[date, list[CorporateAction]] = {}
-        for ts_code, stock_ratio, cash_per_share, ex_date, pay_date in rows:
+        for ts_code, stock_ratio, cash_per_share, ex_date, pay_date, cash_reference in rows:
             symbol = parse_tushare_symbol(ts_code)
             identity = f"{ts_code}:{ex_date}:{pay_date}:{stock_ratio}:{cash_per_share}"
             entitlement_id = uuid5(NAMESPACE_URL, f"aquant:dividend:{identity}:cash")
@@ -422,6 +436,7 @@ class DuckDBMicrocapHistory:
                             CorporateActionKind.STOCK_DIVIDEND,
                             occurred_at,
                             ratio=stock,
+                            cash_in_lieu_price=_optional_decimal(cash_reference),
                         )
                     )
             if (

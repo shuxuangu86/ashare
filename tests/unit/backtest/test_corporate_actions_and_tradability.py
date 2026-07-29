@@ -263,6 +263,25 @@ def test_actions_reject_duplicates_fractional_shares_and_unfunded_rights() -> No
         ledger.apply_corporate_action(rights)
 
 
+def test_stock_dividend_cash_in_lieu_preserves_fractional_value() -> None:
+    ledger = PortfolioLedger(Decimal("1000"))
+    ledger.apply_fill(_fill())
+    action = _action(
+        2,
+        CorporateActionKind.STOCK_DIVIDEND,
+        ratio=Decimal("0.015"),
+        cash_in_lieu_price=Decimal("9"),
+    )
+    ledger.apply_corporate_action(action)
+    snapshot = ledger.snapshot(
+        asof_time=datetime(2026, 7, 2, 7, tzinfo=UTC),
+        prices={SYMBOL: Decimal("9")},
+    )
+    assert snapshot.positions[0].quantity == 101
+    assert snapshot.cash == Decimal("4.500")
+    assert snapshot.equity == Decimal("913.500")
+
+
 class _BuyOnce:
     def on_close(self, context: StrategyContext) -> tuple[OrderRequest, ...]:
         if context.session.trade_date == date(2026, 7, 1):
