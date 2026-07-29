@@ -13,7 +13,11 @@ from urllib.error import HTTPError, URLError
 
 from aquant.data.ingestion.raw_store import RawBatchStore
 from aquant.data.providers.base import DatasetRequest, ProviderResponse
-from aquant.data.providers.tushare import HttpTransport, UrllibHttpTransport
+from aquant.data.providers.tushare import (
+    HttpTransport,
+    TinyShareHttpTransport,
+    UrllibHttpTransport,
+)
 
 
 class TushareApiError(RuntimeError):
@@ -165,8 +169,8 @@ class TushareBulkArchiver:
     ) -> None:
         if not token.strip():
             raise ValueError("Tushare token must not be blank")
-        if not endpoint.startswith("https://"):
-            raise ValueError("bulk archive endpoint must use HTTPS")
+        if not endpoint.startswith(("https://", "tinyshare://")):
+            raise ValueError("bulk archive endpoint must use HTTPS or tinyshare")
         if timeout_seconds <= 0 or minimum_interval_seconds < 0 or max_attempts <= 0:
             raise ValueError("invalid retry or throttle configuration")
         self._token = token.strip()
@@ -176,7 +180,11 @@ class TushareBulkArchiver:
         self._timeout = timeout_seconds
         self._minimum_interval = minimum_interval_seconds
         self._max_attempts = max_attempts
-        self._transport = transport or UrllibHttpTransport()
+        self._transport = transport or (
+            TinyShareHttpTransport(self._token)
+            if endpoint.startswith("tinyshare://")
+            else UrllibHttpTransport()
+        )
         self._last_request_at = 0.0
         self._throttle_lock = threading.Lock()
 

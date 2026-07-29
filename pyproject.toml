@@ -25,6 +25,7 @@ data = [
   "psycopg[binary,pool]>=3.2,<4",
   "redis>=5.2,<7",
   "sqlalchemy>=2.0,<3",
+  "tinyshare>=0.1036,<0.1037",
 ]
 research = [
   "lightgbm>=4.5,<5",
@@ -44,6 +45,14 @@ free-data = [
   "akshare>=1.18,<2",
   "baostock>=0.8,<1",
 ]
+
+[tool.uv.sources]
+tinyshare = { index = "tinyshare" }
+
+[[tool.uv.index]]
+name = "tinyshare"
+url = "https://minidoc.pages.dev/simple/"
+explicit = true
 
 [project.scripts]
 aquant = "aquant.cli:main"

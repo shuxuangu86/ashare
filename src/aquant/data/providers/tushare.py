@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 from urllib.request import Request, urlopen
 
+import tinyshare as ts  # type: ignore[import-untyped]
+
 from aquant.data.providers.base import DatasetRequest, ProviderResponse
 
 
@@ -70,6 +72,34 @@ class UrllibHttpTransport:
             )
 
 
+class TinyShareHttpTransport:
+    """Translate TinyShare's DataFrame response into the immutable Raw envelope."""
+
+    def __init__(self, token: str, *, client: Any | None = None) -> None:
+        self._client = client if client is not None else ts.pro_api(token)
+
+    def post_json(self, url: str, payload: Mapping[str, Any], *, timeout: float) -> HttpResponse:
+        del url, timeout
+        api_name = str(payload["api_name"])
+        params = dict(payload.get("params") or {})
+        fields = str(payload.get("fields") or "")
+        frame = self._client.query(api_name, fields=fields, **params)
+        split = json.loads(frame.to_json(orient="split", force_ascii=False, date_format="iso"))
+        body = json.dumps(
+            {
+                "code": 0,
+                "msg": None,
+                "data": {
+                    "fields": split["columns"],
+                    "items": split["data"],
+                },
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return HttpResponse(status_code=200, body=body, content_type="application/json")
+
+
 class TushareProvider:
     """Raw Tushare Pro HTTP adapter; normalization happens after archival."""
 
@@ -86,12 +116,16 @@ class TushareProvider:
             raise ValueError("Tushare token must not be blank")
         if timeout <= 0:
             raise ValueError("timeout must be positive")
-        if not endpoint.startswith(("http://", "https://")):
-            raise ValueError("Tushare endpoint must use HTTP or HTTPS")
+        if not endpoint.startswith(("http://", "https://", "tinyshare://")):
+            raise ValueError("data endpoint must use HTTP, HTTPS, or tinyshare")
         self._token = token.strip()
         self._endpoint = endpoint
         self._timeout = timeout
-        self._transport = transport or UrllibHttpTransport()
+        self._transport = transport or (
+            TinyShareHttpTransport(self._token)
+            if endpoint.startswith("tinyshare://")
+            else UrllibHttpTransport()
+        )
         self._clock = clock or (lambda: datetime.now(UTC))
 
     @property
