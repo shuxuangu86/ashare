@@ -8,8 +8,11 @@ from pathlib import Path
 from aquant.factors.evaluation import write_leakage_attestation
 
 _TESTS = (
+    "tests/unit/data/test_industry_pit.py",
+    "tests/unit/factors/test_atomic_library.py",
     "tests/unit/factors/test_institutional_evaluation.py",
     "tests/unit/factors/test_l1_operators.py",
+    "tests/unit/factors/test_neutralization_pipeline.py",
     "tests/integration/test_factor_pipeline.py",
 )
 

@@ -12,6 +12,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from aquant.data.history.tushare import RawHistoryPage
 from aquant.data.industry.models import IndustryClassification, IndustryMembershipRecord
 from aquant.data.industry.publisher import (
     IndustryPITPublisher,
@@ -30,6 +31,7 @@ from aquant.data.industry.standardizer import (
     _memberships,
     _remove_overlaps,
     _SourceRow,
+    standardize_industry_history,
 )
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -361,6 +363,174 @@ def test_standardizer_builds_hierarchy_deduplicates_and_converts_out_date() -> N
     assert memberships[0].effective_to == date(2022, 1, 5)
     assert memberships[0].available_at.hour == 15
     assert [item["reason_code"] for item in rejected] == ["INVALID_MEMBERSHIP_DATE"]
+
+
+def _raw_page(
+    tmp_path: Path,
+    dataset: str,
+    fields: list[str],
+    items: list[list[object]],
+) -> RawHistoryPage:
+    payload = tmp_path / f"{dataset}.json"
+    manifest = tmp_path / f"{dataset}-manifest.json"
+    payload.write_text(
+        json.dumps({"code": 0, "data": {"fields": fields, "items": items}}),
+        encoding="utf-8",
+    )
+    manifest.write_text(json.dumps({"sha256": dataset * 8}), encoding="utf-8")
+    return RawHistoryPage(
+        api_name=dataset,
+        params={},
+        row_count=len(items),
+        fields=tuple(fields),
+        payload_path=payload,
+        manifest_path=manifest,
+        updated_at=datetime(2026, 7, 17, tzinfo=UTC),
+    )
+
+
+def test_standardize_industry_history_reads_raw_pages_and_hashes_lineage(
+    tmp_path: Path,
+) -> None:
+    classification = _raw_page(
+        tmp_path,
+        "index_classify",
+        ["src", "level", "index_code", "industry_code", "industry_name", "parent_code"],
+        [["SW2021", "L1", "801010.SI", "110000", "Agriculture", None]],
+    )
+    membership = _raw_page(
+        tmp_path,
+        "index_member",
+        ["index_code", "con_code", "in_date", "out_date"],
+        [["801010.SI", "000001.SZ", "20211213", None]],
+    )
+
+    class CatalogStub:
+        def pages(self, dataset: str) -> tuple[RawHistoryPage, ...]:
+            return (classification,) if dataset == "index_classify" else (membership,)
+
+    result = standardize_industry_history(
+        CatalogStub(),  # type: ignore[arg-type]
+        data_release_id="cn_equity_20260717_001",
+        trading_days=(date(2021, 12, 13), date(2021, 12, 14)),
+        systems=("sw2021", "SW2021"),
+    )
+
+    assert result.raw_classification_rows == 1
+    assert result.raw_membership_rows == 1
+    assert result.classifications[0].industry_code == "801010.SI"
+    assert result.memberships[0].ts_code == "000001.SZ"
+    assert len(result.source_fingerprint) == 64
+
+
+@pytest.mark.parametrize(
+    ("release_id", "trading_days", "systems", "message"),
+    [
+        ("", (date(2021, 12, 13),), ("SW2021",), "requires release"),
+        ("release", (), ("SW2021",), "requires release"),
+        ("release", (date(2021, 12, 13),), ("UNKNOWN",), "unsupported"),
+    ],
+)
+def test_standardize_industry_history_rejects_invalid_contract(
+    release_id: str,
+    trading_days: tuple[date, ...],
+    systems: tuple[str, ...],
+    message: str,
+) -> None:
+    catalog = SimpleNamespace(pages=lambda _dataset: ())
+    with pytest.raises(ValueError, match=message):
+        standardize_industry_history(
+            catalog,  # type: ignore[arg-type]
+            data_release_id=release_id,
+            trading_days=trading_days,
+            systems=systems,
+        )
+
+
+def test_standardizer_quarantines_bad_and_conflicting_classifications() -> None:
+    ingested = datetime(2026, 7, 17, tzinfo=UTC)
+    rows = (
+        _SourceRow({}, "empty", ingested),
+        _SourceRow(
+            {
+                "src": "SW2021",
+                "level": "L1",
+                "index_code": "801010.SI",
+                "industry_code": "110000",
+                "industry_name": "Agriculture",
+            },
+            "first",
+            ingested,
+        ),
+        _SourceRow(
+            {
+                "src": "SW2021",
+                "level": "L1",
+                "index_code": "801010.SI",
+                "industry_code": "110000",
+                "industry_name": "Conflicting name",
+            },
+            "second",
+            ingested,
+        ),
+    )
+    accepted, quarantine = _classifications(
+        rows,
+        data_release_id="release",
+        systems=("SW2021",),
+    )
+    assert accepted == ()
+    assert {item["reason_code"] for item in quarantine} == {
+        "INVALID_CLASSIFICATION",
+        "CONFLICTING_CLASSIFICATION",
+    }
+
+
+def test_membership_filters_unknown_and_out_of_range_records() -> None:
+    ingested = datetime(2026, 7, 17, tzinfo=UTC)
+    rows = (
+        _SourceRow(
+            {
+                "index_code": "UNKNOWN",
+                "con_code": "000001.SZ",
+                "in_date": "20220101",
+                "out_date": "",
+            },
+            "unknown",
+            ingested,
+        ),
+        _SourceRow(
+            {
+                "index_code": "801010.SI",
+                "con_code": "000001.SZ",
+                "in_date": "20220101",
+                "out_date": "20220102",
+            },
+            "before",
+            ingested,
+        ),
+        _SourceRow(
+            {
+                "index_code": "801010.SI",
+                "con_code": "000002.SZ",
+                "in_date": "20240101",
+                "out_date": "",
+            },
+            "after",
+            ingested,
+        ),
+    )
+    memberships, quarantine, duplicates = _memberships(
+        rows,
+        classifications=(_classification(),),
+        data_release_id="release",
+        trading_days=(date(2022, 1, 1), date(2022, 1, 2)),
+        start_date=date(2023, 1, 1),
+        end_date=date(2023, 12, 31),
+    )
+    assert memberships == ()
+    assert duplicates == 0
+    assert [item["reason_code"] for item in quarantine] == ["UNKNOWN_INDUSTRY_CODE"]
 
 
 def test_publisher_is_atomic_and_idempotent(

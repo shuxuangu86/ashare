@@ -5,7 +5,9 @@ import pytest
 from aquant.domain.data_release import DataReleaseId
 from aquant.factors.atomic import baseline_factor_library
 from aquant.factors.feature_sets import (
+    FactorMember,
     FeatureRole,
+    FeatureSetSpec,
     FeatureSetStatus,
     build_baseline_feature_sets,
 )
@@ -52,3 +54,45 @@ def test_baseline_feature_sets_reject_uncontrolled_compact_size(count: int) -> N
             effective_from=date(2026, 7, 17),
             created_from_experiment="invalid",
         )
+
+
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    [
+        ({"target_horizon": 0}, "target horizon"),
+        ({"factor_members": ()}, "at least one factor"),
+        (
+            {
+                "factor_members": (
+                    FactorMember(factor_id="a", factor_version="1"),
+                    FactorMember(factor_id="a", factor_version="1"),
+                )
+            },
+            "duplicate factor",
+        ),
+        ({"training_window_days": 0}, "training window"),
+        (
+            {"evaluation_window": (date(2026, 2, 1), date(2026, 1, 1))},
+            "evaluation window",
+        ),
+        ({"lineage": (("source", "a"), ("source", "b"))}, "lineage keys"),
+        ({"config_hash": "NOT-A-HASH"}, "config hash"),
+    ],
+)
+def test_feature_set_spec_rejects_non_reproducible_contracts(
+    updates: dict[str, object],
+    message: str,
+) -> None:
+    payload: dict[str, object] = {
+        "feature_set_id": "test",
+        "version": "1.0.0",
+        "description": "test feature set",
+        "target_horizon": 5,
+        "universe": "all_a_share",
+        "factor_members": (FactorMember(factor_id="a", factor_version="1"),),
+        "selection_method": "test",
+        "created_from_experiment": "test",
+        "data_release_id": DataReleaseId("cn_equity_20260717_001"),
+    }
+    with pytest.raises(ValueError, match=message):
+        FeatureSetSpec.model_validate({**payload, **updates})

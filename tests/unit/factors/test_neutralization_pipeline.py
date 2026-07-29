@@ -3,8 +3,12 @@ from datetime import date, timedelta
 import numpy as np
 import pytest
 
+from aquant.data.industry.models import IndustryPITPanel
+from aquant.factors.atomic.models import FactorPanelInput
 from aquant.factors.preprocessing import (
     PITExposurePanel,
+    load_pit_exposures,
+    load_size_exposures,
     neutralization_variants,
     neutralize_pit_factor,
 )
@@ -77,3 +81,79 @@ def test_single_industry_cross_section_is_blocked() -> None:
     )
     assert result.diagnostics[0].status == "BLOCKED"
     assert np.all(np.isnan(result.neutralized_value))
+
+
+def test_exposure_loaders_preserve_panel_alignment_and_availability() -> None:
+    dates = (date(2024, 1, 2), date(2024, 1, 3))
+    codes = ("000001.SZ", "600000.SH")
+    cap = np.array([[1e9, 2e9], [1.1e9, 2.1e9]])
+    panel = FactorPanelInput(dates, codes, {"float_market_cap": cap})
+    industries = np.array([["bank", "bank"], ["bank", "bank"]], dtype=object)
+    available = np.array([[dates[0]] * 2, [dates[1]] * 2], dtype=object)
+
+    class RepositoryStub:
+        def panel(
+            self,
+            trade_dates: tuple[date, ...],
+            ts_codes: tuple[str, ...],
+            *,
+            level: str,
+        ) -> IndustryPITPanel:
+            assert (trade_dates, ts_codes, level) == (dates, codes, "L1")
+            return IndustryPITPanel(dates, codes, industries, available)
+
+    pit = load_pit_exposures(panel, RepositoryStub())  # type: ignore[arg-type]
+    size = load_size_exposures(panel)
+    assert np.array_equal(pit.industries, industries)
+    assert np.array_equal(pit.float_market_cap, cap)
+    assert all(value is None for value in size.industries.ravel())
+    assert size.available_dates.tolist() == [[dates[0]] * 2, [dates[1]] * 2]
+
+
+def test_exposure_loaders_and_variants_reject_invalid_contracts() -> None:
+    panel = FactorPanelInput((date(2024, 1, 2),), ("000001.SZ",), {"close": np.ones((1, 1))})
+    repository = object()
+    with pytest.raises(KeyError, match="float_market_cap"):
+        load_pit_exposures(panel, repository)  # type: ignore[arg-type]
+    with pytest.raises(KeyError, match="float_market_cap"):
+        load_size_exposures(panel)
+    with pytest.raises(ValueError, match="fields must align"):
+        PITExposurePanel(
+            panel.trade_dates,
+            np.empty((1, 2), dtype=object),
+            np.ones((1, 1)),
+            np.empty((1, 1), dtype=object),
+        )
+    valid = PITExposurePanel(
+        panel.trade_dates,
+        np.array([["bank"]], dtype=object),
+        np.ones((1, 1)),
+        np.array([[panel.trade_dates[0]]], dtype=object),
+    )
+    with pytest.raises(ValueError, match="panels must align"):
+        neutralization_variants(np.ones((2, 1)), valid)
+    with pytest.raises(ValueError, match="positive"):
+        neutralization_variants(
+            np.ones((1, 1)),
+            valid,
+            minimum_industry_observations=0,
+        )
+
+
+def test_size_only_neutralization_marks_missing_cap_without_industry() -> None:
+    dates = (date(2024, 1, 2),)
+    cap = np.linspace(1e9, 3e10, 30)[None, :]
+    cap[0, 0] = np.nan
+    exposures = PITExposurePanel(
+        dates,
+        np.full((1, 30), None, dtype=object),
+        cap,
+        np.array([[dates[0]] * 30], dtype=object),
+    )
+    result = neutralize_pit_factor(
+        np.arange(30, dtype=float)[None, :],
+        exposures,
+        method="size",
+    )
+    assert result.neutralization_status[0, 0] == "MISSING_MARKET_CAP"
+    assert np.count_nonzero(result.neutralization_status == "VALID") == 29

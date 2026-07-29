@@ -11,6 +11,17 @@ from aquant.factors.evaluation import (
     verify_leakage_attestation,
     write_leakage_attestation,
 )
+from aquant.factors.evaluation.admission import (
+    _evidence_failure,
+    _failed_lifecycle,
+    _feature_role,
+    _history_years,
+    _non_directional_rejection,
+    _role_rejection,
+    _single_report,
+    _verified_payload,
+)
+from aquant.factors.evaluation.gates import ProductionGateConfig
 from aquant.factors.evaluation.ic import ICStatistics
 from aquant.factors.evaluation.quality import evaluate_quality
 from aquant.factors.reporting import FactorReport, write_factor_report
@@ -147,6 +158,66 @@ def test_leakage_attestation_rejects_another_code_version(tmp_path: Path) -> Non
             data_release_id="cn_equity_20260717_001",
             code_version="different-revision",
         )
+
+
+def test_admission_roles_and_lifecycle_are_auditable() -> None:
+    config = ProductionGateConfig.from_yaml(Path("config/factors/production_gate_v1.yaml"))
+    base = {
+        "factor": {
+            "factor_id": "factor",
+            "version": "1.0.0",
+            "expected_direction": 0,
+            "family": "size",
+            "tags": [],
+        }
+    }
+    assert _feature_role(base) == "RISK_FACTOR"
+    assert (
+        _feature_role(
+            {**base, "factor": {**base["factor"], "family": "quality", "tags": ["control"]}}
+        )
+        == "CONTROL_FEATURE"
+    )
+    assert (
+        _feature_role({**base, "factor": {**base["factor"], "family": "quality", "tags": []}})
+        == "ALPHA_CANDIDATE"
+    )
+
+    unknown = _non_directional_rejection(base, config)
+    assert unknown["feature_role"] == "EXPECTED_DIRECTION_UNKNOWN"
+    assert unknown["decision"]["rejections"] == ("MISSING_EXPECTED_DIRECTION",)
+    risk = _role_rejection(base, config, "RISK_FACTOR")
+    assert risk["lifecycle_status"] == "RISK_ONLY"
+    control = _role_rejection(base, config, "CONTROL_FEATURE")
+    assert control["lifecycle_status"] == "VALIDATED"
+    failed = _evidence_failure(base, config, KeyError("missing metric"))
+    assert failed["evidence"]["error_type"] == "KeyError"
+    assert _failed_lifecycle(("INSUFFICIENT_HISTORY",)) == "COMPUTED"
+    assert _failed_lifecycle(("OOS_RANK_IC_BELOW_THRESHOLD",)) == "VALIDATED"
+
+
+def test_admission_artifact_validation_rejects_ambiguous_or_tampered_input(
+    tmp_path: Path,
+) -> None:
+    assert _history_years({"start_date": "2021-01-01", "end_date": "2022-01-01"}) == 1.0
+    with pytest.raises(ValueError, match="date range"):
+        _history_years({"start_date": "2022-01-01", "end_date": "2021-01-01"})
+
+    with pytest.raises(ValueError, match="found 0"):
+        _single_report(tmp_path, "missing")
+    (tmp_path / "factor-a.json").write_text("{}")
+    (tmp_path / "factor-b.json").write_text("{}")
+    with pytest.raises(ValueError, match="found 2"):
+        _single_report(tmp_path, "factor")
+
+    valid: dict[str, object] = {"status": "PASS", "data_release_id": "release"}
+    valid["content_hash"] = _hash(valid)
+    path = tmp_path / "verified.json"
+    path.write_text(json.dumps(valid))
+    assert _verified_payload(path)["status"] == "PASS"
+    path.write_text(json.dumps([1, 2, 3]))
+    with pytest.raises(ValueError, match="JSON object"):
+        _verified_payload(path)
 
 
 def _hash(payload: dict[str, object]) -> str:
