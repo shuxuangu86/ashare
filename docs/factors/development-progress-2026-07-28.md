@@ -71,3 +71,62 @@ deliberately excluded from Git.
 - `Production Alpha`: unchanged at 2. Formal L3 Alpha remains NOT STARTED.
 - `Git commits`: `f7933a0`, `c4c7e2a`; the current neutralization commit is
   recorded after its quality gate completes.
+
+### Second-wave continuation
+
+- Added 28 economically distinct, PIT-safe L2 candidates across residual
+  momentum/reversal, quality-growth interactions, liquidity, tail risk,
+  micro-cap interactions and daily price-volume structure. Exact numerical
+  duplicate tests and future-mutation invariance tests pass.
+- Five-year materialization published 182,899,752 rows in 263.59 seconds with
+  3,167,252 KiB peak RSS. Materialization hash:
+  `985aab0300310be3276c14d1e1bdc23c3a717b7a038f33d8f1a5c0cea873b07c`.
+- The 28-factor, five-horizon evaluation completed 28/28 PASS in 696.38 seconds
+  with 3,526,252 KiB peak RSS. Convergence cache hash:
+  `da790cb93e5bb8f16383c4aefb2a07c6974d345db00f65c9fdc8d4c8c730c7f6`.
+- Fixed the research split so convergence uses only the first 80% isolated
+  selection interval and leaves the final 20% holdout untouched.
+- Added structured feature roles, per-factor admission reason codes,
+  lifecycle counts, Markdown admission summaries and Parquet decision tables.
+- Added versioned Feature Set roles, evaluation windows, lineage, lifecycle
+  status and deterministic hashes that exclude only the observational
+  `created_at` timestamp.
+- A unified 101-factor沪深 five-year reevaluation is `RUNNING`; its reports and
+  convergence cache checkpoint each completed factor.
+
+### Unified evaluation and admission result
+
+- Unified five-year evaluation completed 101/101 factors across
+  1D/5D/10D/20D/40D in 29:34.26 with 4,693,632 KiB peak RSS. Evaluation hash:
+  `9f55322d54a8e74a28d26f0287e205d2e167587cb6a98398814466a2211590a9`.
+- Holdout-safe three-view convergence completed in 5:41.36 with 2,547,884 KiB
+  peak RSS and selected 17 compact candidates. Selection hash:
+  `f5a637a4cca288334bc520577bbcee4bcaa8a20c2e7b804c599ae8ecab8e40dc`.
+- Strict admission returned `INSUFFICIENT_EVIDENCE`: one Production Alpha
+  (`amount_concentration_20d`), one Risk Factor, 11 `FAILED_GATE`, and four
+  `INSUFFICIENT_EVIDENCE`. Gate thresholds were unchanged.
+- Rebuilt feature sets deterministically: raw 101-factor DRAFT hash
+  `c901f6c7...57ab7`, compact 17-factor VALIDATED hash
+  `7780356a...60254`, and neutral 17-factor DRAFT hash
+  `ba1de144...d64b4`. A second build produced identical hashes.
+- Formal L3 Alpha training is `BLOCKED` because Production Alpha count is one,
+  below the attested minimum of eight. The CLI now rejects formal training
+  without a passing admission artifact.
+
+### TinyShare source recovery
+
+- Installed and locked `tinyshare==0.1036.0`; the authorization code is stored
+  only in ignored local `.env`. A real daily query returned six expected rows.
+- Added a TinyShare transport adapter without changing immutable Raw response,
+  checkpoint, manifest or normalization contracts.
+- SW2014 backfill completed 359 classifications and 58,086 membership rows with
+  zero failures in 48.12 seconds (124,908 KiB peak RSS).
+- Published combined `sw_industry_pit_20260717_v3`, hash
+  `3dcd98d0461e926d9c6322be261ef22302d2b5dc23123de07f4bba6369e86a6b`.
+- Five-year industry quality remains `BLOCKED`: overall coverage is 95.93%,
+  while 2021/2022/2023 are 92.18%/90.61%/92.14%. This is a source-history
+  completeness failure, not an access failure; the annual 95% gate is intact.
+- Final quality gate: 635 tests passed, total coverage 88.32%, Ruff and format
+  checks passed, and mypy passed for 211 source files.
+- Real event/accounting smoke passed 34 sessions, 2,416 orders and 2,414 fills
+  in 17.67 seconds with 1,155,308 KiB peak RSS. It remains wiring evidence only.

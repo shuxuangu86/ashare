@@ -112,3 +112,16 @@ temporary directories into place. Do not edit a historical manifest.
 - Evaluation checkpoint: `reports/<run>/evaluation_manifest.json`
 - Performance records: `reports/benchmarks/*.json`
 - Production gate configuration: `config/factors/production_gate_v1.yaml`
+
+## TinyShare source configuration
+
+Install the locked data extra and configure the ignored local environment:
+
+```bash
+uv sync --extra data
+TUSHARE_ENDPOINT=tinyshare://pro
+```
+
+`TUSHARE_TOKEN` carries the TinyShare authorization code. Never place it in a
+tracked configuration file or command log. The adapter preserves AQuant's
+existing immutable Raw envelope, checkpoint and manifest contracts.

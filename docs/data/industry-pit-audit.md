@@ -82,7 +82,8 @@ never overwrites an existing verified release.
 `PARTIAL / EXTERNAL ACCESS BLOCKED`: the Standard/PIT schema, standardizer,
 repository, atomic publisher, validation CLI and resumable ingestion CLI are
 implemented. A real SW2021-only release was published as
-`sw2021_industry_pit_20260717_v1`.
+`sw2021_industry_pit_20260717_v2`, bound to
+`cn_equity_20260717_001`.
 
 The SW2014 fetch was attempted on 2026-07-29 and Tushare returned error 2002
 (`token expired`). The resumable failure record is
@@ -99,3 +100,27 @@ because annual coverage is only 91.72%, 90.61%, and 92.14% in 2021, 2022, and
 above 99.9% from 2024 onward. No threshold was relaxed. SW2014 history and the
 early SW2021 source gap must be resolved before five-year neutral evaluation or
 promotion of `baseline_neutral_v1`.
+
+## 2026-07-29 TinyShare follow-up
+
+The expired primary-source credential was replaced locally by a TinyShare
+authorization code. The credential remains only in the ignored `.env`; neither
+the code, manifests, Raw payload lineage nor logs contain it. AQuant now adapts
+the TinyShare SDK response to the existing immutable Tushare-compatible Raw
+envelope, so checkpointing, throttling, hashes and downstream normalization are
+unchanged.
+
+The resumed SW2014 fetch completed with 359 classifications, 58,086 membership
+rows, zero failed codes and 228 checkpoint hits. It took 48.12 seconds and
+peaked at 124,908 KiB RSS. The combined SW2014/SW2021 release
+`sw_industry_pit_20260717_v3` was published with content hash
+`3dcd98d0461e926d9c6322be261ef22302d2b5dc23123de07f4bba6369e86a6b`.
+
+The five-year quality status remains `BLOCKED`, now due to source completeness
+rather than access. Overall Shanghai/Shenzhen stock-day coverage is 95.93%, but
+2021/2022/2023 coverage is 92.18%/90.61%/92.14%. There are no simultaneous
+membership conflicts. TinyShare exposes the same interval membership history
+for these endpoints and does not supply historical announcement timestamps.
+Static current-industry fields remain an invalid substitute. The 95% annual
+gate was not relaxed, and this release is not approved for five-year neutral
+evaluation.
