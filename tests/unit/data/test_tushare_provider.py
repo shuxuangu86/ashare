@@ -4,13 +4,11 @@ from email.message import Message
 from typing import Any
 from urllib.request import Request
 
-import pandas as pd
 import pytest
 
 from aquant.data.providers import DatasetRequest, MarketDataProvider, TushareProvider
 from aquant.data.providers.tushare import (
     HttpResponse,
-    TinyShareHttpTransport,
     UrllibHttpTransport,
 )
 
@@ -23,20 +21,6 @@ class RecordingTransport:
     def post_json(self, url: str, payload: dict[str, Any], *, timeout: float) -> HttpResponse:
         self.calls.append((url, payload, timeout))
         return self.response
-
-
-class TinyShareClientStub:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, str, dict[str, object]]] = []
-
-    def query(self, api_name: str, *, fields: str, **params: object) -> pd.DataFrame:
-        self.calls.append((api_name, fields, params))
-        return pd.DataFrame(
-            {
-                "ts_code": ["000001.SZ", "600000.SH"],
-                "trade_date": ["20260211", None],
-            }
-        )
 
 
 class StubUrlResponse:
@@ -129,30 +113,6 @@ def test_urllib_transport_sends_json_post(monkeypatch: pytest.MonkeyPatch) -> No
     assert captured["timeout"] == 12.5
     assert response.status_code == 200
     assert response.content_type == "application/json"
-
-
-def test_tinyshare_transport_preserves_raw_envelope_contract() -> None:
-    client = TinyShareClientStub()
-    response = TinyShareHttpTransport("unused", client=client).post_json(
-        "tinyshare://pro",
-        {
-            "api_name": "daily",
-            "params": {"trade_date": "20260211"},
-            "fields": "ts_code,trade_date",
-        },
-        timeout=30,
-    )
-
-    assert client.calls == [("daily", "ts_code,trade_date", {"trade_date": "20260211"})]
-    assert json.loads(response.body) == {
-        "code": 0,
-        "msg": None,
-        "data": {
-            "fields": ["ts_code", "trade_date"],
-            "items": [["000001.SZ", "20260211"], ["600000.SH", None]],
-        },
-    }
-    assert response.status_code == 200
 
 
 def test_tushare_provider_preserves_error_response_for_raw_archival() -> None:
