@@ -1,0 +1,28 @@
+schema_version: aquant.wind-microcap-replication.v1
+index_code: 8841431.WI
+target_count: 400
+selection:
+  exchanges:
+    - XSHG
+    - XSHE
+  market_cap_field: total_market_cap
+  exclude_st: true
+  exclude_delisting_risk: true
+  exclude_unopened_ipo_limit_board: true
+  retain_suspended_with_last_visible_market_cap: true
+  signal_timing: previous_session_close
+weighting:
+  method: arithmetic_equal_weight
+  reset_frequency: daily
+execution:
+  ignore_price_limits: true
+  slippage_bps: 0
+  fees_bps: 0
+benchmark:
+  search_url: https://indexapi.wind.com.cn/indicesWebsite/api/searchadv
+  recent_daily_history_url: https://indexapi.wind.com.cn/indicesWebsite/api/Kline
+  weekly_history_url: https://indexapi.wind.com.cn/indicesWebsite/api/indexreturn2
+  annual_return_url: https://indexapi.wind.com.cn/indicesWebsite/api/IndexAnnualYield
+quality_gate:
+  maximum_annual_difference_percentage_points: 1
+  maximum_monthly_difference_percentage_points: 3

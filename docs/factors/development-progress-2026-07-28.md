@@ -202,3 +202,30 @@ deliberately excluded from Git.
 - Runtime was 17.92 seconds with 1,041,428 KiB peak RSS.
 - Final gate: 663 tests passed with 88.47% coverage; Ruff and format passed,
   and mypy passed for 216 source files.
+
+### Wind microcap daily equal-weight replication
+
+- Added a deterministic reference implementation for Wind
+  `8841431.WI`: prior-close PIT selection, the smallest 400 Shanghai/Shenzhen
+  A shares by total market capitalization, daily arithmetic equal weighting,
+  zero fees/slippage, and no price-limit execution blocking.
+- Historical eligibility excludes PIT ST/delisting-risk names and unopened IPO
+  limit boards. Suspended names retain their last visible capitalization and
+  contribute zero return until their next visible close.
+- Real-data run from 2024-01-01 through 2025-12-31 processed 485 sessions and
+  194,000 constituent-day rows. Replication returned 8.6437% versus Wind
+  9.9972% in 2024, and 77.3652% versus Wind 81.6455% in 2025.
+- Wind's exact public daily series overlaps August–December 2025; maximum
+  monthly difference in that exact overlap is only 0.0696 percentage point.
+  Older public chart data are weekly sampled and are diagnostic only.
+- Quality status remains `FAILED_DEBUG_CALIBRATION`: maximum annual difference
+  is 4.2802 percentage points, exceeding the configured 1-point gate. This
+  indicates unresolved historical constituent-eligibility/source differences;
+  no filter was tuned to force a pass.
+- Artifact:
+  `artifacts/backtest_debug/wind_microcap/wind-microcap-replication-47af475f7025.json`;
+  content hash:
+  `47af475f70259e902ca5b687baf92d11bae92271a84f872b085f89fdc534d918`.
+- Runtime was 20.70 seconds with 1,821,568 KiB peak RSS.
+- Final gate: 666 tests passed with 88.52% coverage; Ruff and format passed,
+  and mypy passed for 217 source files.

@@ -184,3 +184,20 @@ remain unfilled or monthly, annual, or daily tracking-error gates are breached.
 Its JSON and Markdown reports are written below
 `artifacts/backtest_debug/csi300/`. This is a zero-cost index-accounting
 calibration, not a tradable performance claim.
+
+# Wind microcap daily equal-weight replication
+
+Run the zero-friction formula-level reference against Wind's public benchmark:
+
+```bash
+uv run python scripts/debug_wind_microcap_replication.py \
+  --history-release data/standard/history-release=cn_equity_history_20260717_001 \
+  --start-date 20240101 \
+  --end-date 20251231
+```
+
+The command validates 400 unique constituents per session, writes immutable
+JSON/Markdown evidence under `artifacts/backtest_debug/wind_microcap/`, and
+returns exit code 2 when its calibration gates fail. Wind's older public chart
+is weekly sampled; only exact-daily overlap and official annual returns are
+used as strict calibration evidence.
