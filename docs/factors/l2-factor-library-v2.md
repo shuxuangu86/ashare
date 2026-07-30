@@ -28,6 +28,12 @@ price/volume divergence, compression, and expansion. Parameter sets are finite a
 source/research-hypothesis based. Generation aborts on duplicate factor identifiers or
 expression hashes.
 
+The published-formula layer adds 101 Alpha101 and 191 GTJA Alpha191 registrations.
+Runtime golden-panel audit passes 291/292: Alpha101 passes 101/101 and GTJA passes
+190/191. GTJA Alpha143 is cataloged but non-executable because `SELF` is undefined.
+Faithfulness is split into `EXACT`, `NORMALIZED_EQUIVALENT`, `A_SHARE_ADAPTED`, and
+`CORRECTED_AMBIGUITY`; raw and adopted expressions are stored side by side.
+
 The catalog maps candidates into the requested representation packs and the family packs
 `technical_trend_v1`, `technical_momentum_v1`, `technical_reversal_v1`,
 `technical_oscillator_v1`, `technical_channel_v1`, `technical_volatility_v1`,
@@ -66,7 +72,8 @@ output/predictive deduplication, and family selection complete.
 
 ## Explicit partial/deferred scope
 
-- `PARTIAL`: Alpha101 is 0/101 and Alpha191 is 0/191 exact reproductions in this release.
+- `IMPLEMENTED`: Alpha101 101/101 and GTJA Alpha191 190/191 are executable.
+- `PARTIAL`: GTJA Alpha143 remains `FORMULA_AMBIGUOUS`; no guessed `SELF` semantics.
 - `DEFERRED`: minute UTD/UTR and high-frequency indicator aggregation require minute data.
 - `DEFERRED`: gross-profitability and asset-growth extensions require broader financial PIT fields.
 - `PARTIAL`: output and predictive-behavior deduplication require real materialized values.

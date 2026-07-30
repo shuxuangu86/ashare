@@ -1,15 +1,11 @@
 {
-  "code_version": "0b17e4c5a15ebbda20f4fca95ae86740168a733d",
-  "config_hash": "2acf60fe4eb0127255241128a7302d3df9c2cfd220e70147e9a55622de8e176d",
-  "data_release_id": "cn_equity_20260717_001",
-  "end_date": "2026-07-17",
-  "evaluation_factor_count": 98,
-  "factor_count": 1571,
-  "factor_pack": "technical_classic_level_v1",
-  "log_file": "artifacts/logs/l2-v2-technical-level-evaluation.log",
-  "pid": 17752,
-  "reason_code": "FIRST_CONTROLLED_BATCH_RUNNING",
+  "code_version": "38fef9309f10220d32fb5c944567204657756614",
+  "config_hash": "e6cee6e00201cafa482dc8b468d4ffcb73ef8a229ceb475ec54cf885aad2ce2b",
+  "data_release_id": null,
+  "end_date": null,
+  "factor_count": 1863,
+  "reason_code": "AWAITING_MATERIALIZATION_AND_OOS_EVALUATION",
   "schema_version": "aquant.factor-evaluation-summary.v2",
-  "start_date": "2021-07-18",
-  "status": "RUNNING"
+  "start_date": null,
+  "status": "NOT_STARTED"
 }
