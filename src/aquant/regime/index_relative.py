@@ -8,6 +8,7 @@ from aquant.regime.definitions import (
     MarketStateRole,
     MarketStateScope,
     MarketStateSpec,
+    MarketStateStatus,
 )
 from aquant.regime.protocol import Numeric, StateSeries
 
@@ -37,6 +38,7 @@ def index_relative_state_specs() -> tuple[MarketStateSpec, ...]:
                 "HS300 versus CSI2000 captures the large-small capitalization cycle."
             ),
             role=MarketStateRole.REGIME_INPUT,
+            status=MarketStateStatus.DATA_DEPENDENCY_MISSING,
             correlation_cluster="hs300_minus_csi2000_return",
             related_states=tuple(
                 f"hs300_minus_csi2000_return_{other}d"

@@ -8,6 +8,7 @@ from aquant.regime.definitions import (
     MarketStateRole,
     MarketStateScope,
     MarketStateSpec,
+    MarketStateStatus,
 )
 from aquant.regime.percentiles import expanding_percentile, rolling_percentile
 from aquant.regime.protocol import Numeric, StateSeries
@@ -91,6 +92,7 @@ def valuation_state_specs() -> tuple[MarketStateSpec, ...]:
                 aggregation_method="CROSS_SECTIONAL_MEAN",
                 expected_interpretation="Higher values indicate higher constituent cash yield.",
                 economic_rationale="The simple mean describes the average index constituent.",
+                status=MarketStateStatus.DATA_DEPENDENCY_MISSING,
                 **common,
             ),
             MarketStateSpec(
@@ -108,6 +110,7 @@ def valuation_state_specs() -> tuple[MarketStateSpec, ...]:
                     "Higher values indicate broad-based constituent cash yield."
                 ),
                 economic_rationale="The median reduces sensitivity to a few extreme yields.",
+                status=MarketStateStatus.DATA_DEPENDENCY_MISSING,
                 **common,
             ),
             MarketStateSpec(
@@ -125,6 +128,7 @@ def valuation_state_specs() -> tuple[MarketStateSpec, ...]:
                     "Higher values indicate higher investable index cash yield."
                 ),
                 economic_rationale="Free-float weights approximate an investable portfolio.",
+                status=MarketStateStatus.DATA_DEPENDENCY_MISSING,
                 **common,
             ),
             MarketStateSpec(
@@ -141,6 +145,7 @@ def valuation_state_specs() -> tuple[MarketStateSpec, ...]:
                 percentile_method="ROLLING_756D_AVERAGE_TIE",
                 expected_interpretation="Values near one indicate unusually high dividend yield.",
                 economic_rationale="Past-only yield percentile contextualizes income valuation.",
+                status=MarketStateStatus.DATA_DEPENDENCY_MISSING,
                 **common,
             ),
         )

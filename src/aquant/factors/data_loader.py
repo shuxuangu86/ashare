@@ -32,8 +32,22 @@ _FIELD_SOURCE = {
 class StandardPITFactorLoader:
     """Load aligned factor panels from one immutable Standard/PIT release."""
 
-    def __init__(self, release_directory: Path) -> None:
+    def __init__(
+        self,
+        release_directory: Path,
+        *,
+        dtype: npt.DTypeLike = np.float64,
+        duckdb_memory_limit: str | None = None,
+        duckdb_threads: int | None = None,
+    ) -> None:
         self.release = HistoryReleaseReader(release_directory)
+        self._dtype = np.dtype(dtype)
+        self._duckdb_memory_limit = duckdb_memory_limit
+        self._duckdb_threads = duckdb_threads
+        if self._dtype.kind != "f":
+            raise ValueError("factor panel dtype must be floating point")
+        if duckdb_threads is not None and duckdb_threads <= 0:
+            raise ValueError("DuckDB thread count must be positive")
 
     def load(
         self,
@@ -101,6 +115,10 @@ class StandardPITFactorLoader:
         """
         connection = duckdb.connect(":memory:")
         try:
+            if self._duckdb_memory_limit is not None:
+                connection.execute(f"SET memory_limit = '{self._duckdb_memory_limit}'")
+            if self._duckdb_threads is not None:
+                connection.execute(f"SET threads = {self._duckdb_threads}")
             daily_pattern = self.release.parquet_pattern("daily")
             trade_dates = tuple(
                 row[0]
@@ -136,7 +154,7 @@ class StandardPITFactorLoader:
                 field: np.full(
                     (len(trade_dates), len(ts_codes)),
                     np.nan,
-                    dtype=np.float64,
+                    dtype=self._dtype,
                 )
                 for field in fields
             }
@@ -161,7 +179,7 @@ class StandardPITFactorLoader:
                     dtype=np.int64,
                 )
                 for offset, field in enumerate(query_fields, start=2):
-                    values = np.asarray(batch.column(offset).to_pylist(), dtype=np.float64)
+                    values = np.asarray(batch.column(offset).to_pylist(), dtype=self._dtype)
                     arrays[field][date_positions, code_positions] = values
             if "financial" in sources:
                 self._fill_financial(

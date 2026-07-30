@@ -33,7 +33,7 @@ from aquant.regime.valuation import (
 
 def test_core_catalog_contains_p0_states_without_exact_duplicates() -> None:
     registry = core_state_registry()
-    assert len(registry) == 41
+    assert len(registry) == 350
     for state_id in (
         "growth_minus_value_return_40d",
         "hs300_minus_csi2000_return_20d",
@@ -46,6 +46,10 @@ def test_core_catalog_contains_p0_states_without_exact_duplicates() -> None:
         "microcap_pb_percentile_5y",
     ):
         assert registry.get(state_id).availability_lag == 1
+    assert (
+        registry.get("hs300_minus_csi2000_return_40d").status
+        is MarketStateStatus.DATA_DEPENDENCY_MISSING
+    )
 
 
 def test_registry_rejects_identity_and_exact_formula_duplicates() -> None:
@@ -185,7 +189,7 @@ def test_only_registered_interactions_are_built_with_complexity_cap() -> None:
 def test_catalog_selection_and_calculators_cover_aligned_series() -> None:
     registry = core_state_registry()
     assert len(registry.select(family=MarketStateFamily.LIQUIDITY)) == 6
-    assert len(registry.select(status=MarketStateStatus.IMPLEMENTED)) == 41
+    assert len(registry.select(status=MarketStateStatus.IMPLEMENTED)) == 307
     with pytest.raises(KeyError, match="unknown"):
         registry.get("not_registered")
 

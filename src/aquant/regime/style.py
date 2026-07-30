@@ -30,13 +30,15 @@ def style_state_specs() -> tuple[MarketStateSpec, ...]:
                     scope=scope,
                     formula=f"close / delay(close, {window}) - 1",
                     parameters={"window": window, "style": style},
-                    required_datasets=("index_bars_1d",),
-                    required_indices=(style.upper(),),
+                    required_datasets=("daily", "daily_basic", "fina_indicator"),
+                    required_universes=(f"{style.upper()}_DYNAMIC",),
                     lookback=window,
                     minimum_periods=window,
-                    aggregation_method="INDEX_CLOSE_RETURN",
+                    aggregation_method="PIT_DYNAMIC_EQUAL_WEIGHT_RETURN",
                     expected_interpretation=f"Higher means stronger {style} performance.",
-                    economic_rationale="Style-index return measures the prevailing style tape.",
+                    economic_rationale=(
+                        "The current release supports a lagged dynamic style portfolio."
+                    ),
                     role=MarketStateRole.STYLE_STATE,
                     correlation_cluster=f"{style}_return",
                 )
@@ -54,14 +56,14 @@ def style_state_specs() -> tuple[MarketStateSpec, ...]:
                     f"(value_close / delay(value_close, {window})) - 1"
                 ),
                 parameters={"window": window},
-                required_datasets=("index_bars_1d",),
-                required_indices=("GROWTH", "VALUE"),
+                required_datasets=("daily", "daily_basic", "fina_indicator"),
+                required_universes=("GROWTH_DYNAMIC", "VALUE_DYNAMIC"),
                 lookback=window,
                 minimum_periods=window,
                 aggregation_method="COMPOUNDED_RELATIVE_RETURN",
                 expected_interpretation="Positive values indicate growth dominance over value.",
                 economic_rationale=(
-                    "Relative compounded return isolates the growth-value style cycle."
+                    "Lagged dynamic portfolios isolate the growth-value style cycle."
                 ),
                 role=MarketStateRole.REGIME_INPUT,
                 correlation_cluster="growth_minus_value_return",
