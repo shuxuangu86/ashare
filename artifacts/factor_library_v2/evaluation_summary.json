@@ -1,0 +1,11 @@
+{
+  "code_version": "81df1f8fcff9b879e66c226b2da71fb5b6436032",
+  "config_hash": "2acf60fe4eb0127255241128a7302d3df9c2cfd220e70147e9a55622de8e176d",
+  "data_release_id": null,
+  "end_date": null,
+  "factor_count": 1571,
+  "reason_code": "AWAITING_MATERIALIZATION_AND_OOS_EVALUATION",
+  "schema_version": "aquant.factor-evaluation-summary.v2",
+  "start_date": null,
+  "status": "NOT_STARTED"
+}

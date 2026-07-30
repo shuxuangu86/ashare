@@ -1,0 +1,12 @@
+{
+  "methods": [
+    "equal_weight",
+    "rolling_ic_weight",
+    "rolling_icir_weight",
+    "ridge",
+    "elastic_net"
+  ],
+  "reason_code": "AWAITING_FEATURE_ELIGIBLE_POOL",
+  "schema_version": "aquant.l3-family-smoke.v1",
+  "status": "RESEARCH_ONLY_NOT_STARTED"
+}
