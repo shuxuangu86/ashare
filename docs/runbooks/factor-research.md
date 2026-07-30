@@ -166,3 +166,21 @@ uv run python scripts/compare_single_factor_quantiles.py \
 The latest common verified date across history, factor materialization and
 benchmark must be used. Monthly turnover is filled notional divided by
 month-opening equity; friction is fees plus modeled execution slippage.
+# CSI 300 replication calibration
+
+Use the local immutable history release to validate benchmark-replication
+accounting independently of factor selection:
+
+```bash
+uv run python scripts/debug_csi300_replication.py \
+  --history-release data/standard/history-release=cn_equity_history_20260717_001 \
+  --start-date 20240101 \
+  --end-date 20251231
+```
+
+The command verifies source hashes, constituent-weight uniqueness and weight
+sums; applies configured regular and temporary changes; and fails when orders
+remain unfilled or monthly, annual, or daily tracking-error gates are breached.
+Its JSON and Markdown reports are written below
+`artifacts/backtest_debug/csi300/`. This is a zero-cost index-accounting
+calibration, not a tradable performance claim.

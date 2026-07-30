@@ -244,12 +244,22 @@ class DuckDBMicrocapHistory:
     def snapshots(self, trading_dates: tuple[date, ...]) -> dict[date, MicrocapSnapshot]:
         return {trade_date: self.snapshot(trade_date) for trade_date in trading_dates}
 
-    def sessions(self, start_date: date, end_date: date) -> tuple[MarketSession, ...]:
-        """Load all-symbol sessions for a short smoke window, not a full-history matrix."""
+    def sessions(
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        ts_codes: tuple[str, ...] | None = None,
+    ) -> tuple[MarketSession, ...]:
+        """Load sessions, optionally restricted to an explicit immutable symbol universe."""
 
         self.release.require("daily", "stk_limit", "suspend_d", "namechange")
+        codes = tuple(sorted(set(ts_codes or ())))
+        if ts_codes is not None and not codes:
+            raise ValueError("history session symbol filter must not be empty")
+        symbol_filter = " AND {alias}.ts_code = ANY(?)" if codes else ""
         rows = self._connection.execute(
-            """
+            f"""
             WITH historical_names AS (
                 SELECT
                     bar.ts_code,
@@ -267,16 +277,19 @@ class DuckDBMicrocapHistory:
                  AND name.start_date <= bar.trade_date
                  AND (name.end_date IS NULL OR name.end_date >= bar.trade_date)
                 WHERE bar.trade_date BETWEEN ? AND ?
+                {symbol_filter.format(alias="bar")}
             ),
             limits AS (
                 SELECT *
-                FROM read_parquet(?)
+                FROM read_parquet(?) AS limit_row
                 WHERE trade_date BETWEEN ? AND ?
+                {symbol_filter.format(alias="limit_row")}
             ),
             suspensions AS (
                 SELECT DISTINCT ts_code, trade_date
-                FROM read_parquet(?)
+                FROM read_parquet(?) AS suspension_row
                 WHERE trade_date BETWEEN ? AND ?
+                {symbol_filter.format(alias="suspension_row")}
             )
             SELECT
                 bar.ts_code,
@@ -300,6 +313,7 @@ class DuckDBMicrocapHistory:
              AND historical_names.trade_date = bar.trade_date
              AND historical_names.row_number = 1
             WHERE bar.trade_date BETWEEN ? AND ?
+            {symbol_filter.format(alias="bar")}
             ORDER BY bar.trade_date, bar.ts_code
             """,
             [
@@ -307,15 +321,19 @@ class DuckDBMicrocapHistory:
                 self.release.parquet_pattern("namechange"),
                 start_date,
                 end_date,
+                *([codes] if codes else []),
                 self.release.parquet_pattern("stk_limit"),
                 start_date,
                 end_date,
+                *([codes] if codes else []),
                 self.release.parquet_pattern("suspend_d"),
                 start_date,
                 end_date,
+                *([codes] if codes else []),
                 self.release.parquet_pattern("daily"),
                 start_date,
                 end_date,
+                *([codes] if codes else []),
             ],
         ).fetchall()
         grouped_bars: dict[date, list[DailyBar]] = {}
@@ -351,7 +369,7 @@ class DuckDBMicrocapHistory:
         dates = sorted(grouped_bars)
         if not dates:
             raise ValueError("history release has no bars in the requested smoke window")
-        grouped_actions = self.corporate_actions(start_date, end_date)
+        grouped_actions = self.corporate_actions(start_date, end_date, ts_codes=codes or None)
         return tuple(
             MarketSession(
                 trade_date=value,
@@ -368,11 +386,16 @@ class DuckDBMicrocapHistory:
         self,
         start_date: date,
         end_date: date,
+        *,
+        ts_codes: tuple[str, ...] | None = None,
     ) -> dict[date, tuple[CorporateAction, ...]]:
         if not self.release.has_dataset("dividend"):
             return {}
+        codes = tuple(sorted(set(ts_codes or ())))
+        if ts_codes is not None and not codes:
+            raise ValueError("corporate-action symbol filter must not be empty")
         rows = self._connection.execute(
-            """
+            f"""
             SELECT DISTINCT
                 dividend.ts_code,
                 dividend.stk_div,
@@ -397,6 +420,7 @@ class DuckDBMicrocapHistory:
                     (dividend.ex_date BETWEEN ? AND ?)
                  OR (dividend.pay_date BETWEEN ? AND ?)
               )
+              {"AND dividend.ts_code = ANY(?)" if codes else ""}
             ORDER BY coalesce(dividend.ex_date, dividend.pay_date), dividend.ts_code
             """,
             [
@@ -407,6 +431,7 @@ class DuckDBMicrocapHistory:
                 end_date,
                 start_date,
                 end_date,
+                *([codes] if codes else []),
             ],
         ).fetchall()
         grouped: dict[date, list[CorporateAction]] = {}

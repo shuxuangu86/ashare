@@ -4,6 +4,10 @@ from aquant.strategies.discretionary import (
     DiscretionaryDecision,
     DiscretionaryFundamentalStrategy,
 )
+from aquant.strategies.index_replication import (
+    IndexRebalanceTarget,
+    IndexReplicationStrategy,
+)
 from aquant.strategies.microcap import (
     PROTOTYPE_DEFINITIONS,
     CostScenario,
@@ -47,6 +51,8 @@ __all__ = [
     "CostScenario",
     "DiscretionaryDecision",
     "DiscretionaryFundamentalStrategy",
+    "IndexRebalanceTarget",
+    "IndexReplicationStrategy",
     "MicrocapEqualWeightStrategy",
     "MicrocapExperimentOutcome",
     "MicrocapExperimentRunner",

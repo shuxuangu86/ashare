@@ -176,3 +176,29 @@ deliberately excluded from Git.
 - Runtime was 1:59.47 with 2,760,436 KiB peak RSS.
 - Final gate: 653 tests passed with 88.42% coverage; Ruff and format passed,
   and mypy passed for 214 source files.
+
+### CSI 300 replication backtest calibration
+
+- Added an immutable, hash-verified reader for local `index_weight` and
+  `index_daily` Raw pages plus a deterministic CSI 300 replication strategy.
+- Reconstructed regular June/December changes using the official next-session
+  rule and explicitly configured the 2025-03-04 and 2025-09-05 temporary
+  replacements. Later snapshot weights are backcast to effective-open weights
+  using unadjusted prices and share-action multipliers.
+- Fixed two backtest defects exposed by the calibration: rebalance sizing used
+  stale signal-close equity, and missing/suspended constituent bars prevented
+  index-like valuation and left orders unfilled. Portfolio sizing now accepts
+  next-open valuation prices; calibration supplies deterministic last-visible
+  closes while preserving the execution price contract.
+- Zero-cost, zero-slippage replication from 2024-01-01 through 2025-12-31
+  produced 2,148 orders and 2,148 fills. Annual returns were 14.6823% versus
+  14.6833% in 2024 (-0.10 bp) and 17.7727% versus 17.6631% in 2025
+  (+10.95 bp). Annualized daily tracking error was 4.83 bp; maximum monthly
+  difference was 5.34 bp.
+- Quality status: `PASS_DEBUG_CALIBRATION`. Artifact:
+  `artifacts/backtest_debug/csi300/csi300-replication-8fed6755f7cc.json`;
+  content hash:
+  `8fed6755f7ccb71f2281332ff3b7e0674162c3778acaaa0b7048314e693333bf`.
+- Runtime was 17.92 seconds with 1,041,428 KiB peak RSS.
+- Final gate: 663 tests passed with 88.47% coverage; Ruff and format passed,
+  and mypy passed for 216 source files.

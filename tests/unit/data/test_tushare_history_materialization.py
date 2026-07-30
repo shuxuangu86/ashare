@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
+import pytest
 
 from aquant.data.history import (
     DuckDBMicrocapHistory,
@@ -897,6 +898,13 @@ def test_history_reader_enforces_fundamental_lag_and_builds_sessions(
         assert history.trading_dates(trade_date, trade_date) == (trade_date,)
         snapshot = history.snapshot(trade_date)
         sessions = history.sessions(trade_date, trade_date)
+        filtered_sessions = history.sessions(
+            trade_date,
+            trade_date,
+            ts_codes=("000001.SZ",),
+        )
+        with pytest.raises(ValueError, match="must not be empty"):
+            history.sessions(trade_date, trade_date, ts_codes=())
 
     observation = snapshot.observations[0]
     assert observation.net_profit_yoy == 12
@@ -907,3 +915,4 @@ def test_history_reader_enforces_fundamental_lag_and_builds_sessions(
     assert not observation.is_st
     assert not sessions[0].statuses[0].suspended
     assert sessions[0].bars[0].volume == 10_000
+    assert filtered_sessions[0].bars == sessions[0].bars
