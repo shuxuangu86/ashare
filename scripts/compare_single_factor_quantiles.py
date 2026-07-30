@@ -7,11 +7,13 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-import tinyshare as ts  # type: ignore[import-untyped]
+import tushare as ts  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 
 from aquant.backtest import EventDrivenBacktest, UnfilledOrderPolicy, calculate_metrics
 from aquant.data.history import DuckDBMicrocapHistory
+from aquant.data.history.tushare import TushareHistoryCatalog
+from aquant.data.index_history import load_index_history
 from aquant.factors.atomic import baseline_factor_library, second_wave_candidate_library
 from aquant.factors.materialization import MaterializedFactorReader
 from aquant.factors.spec import FactorSpec
@@ -85,16 +87,41 @@ def _write_atomic(path: Path, value: str) -> None:
 
 def _benchmark_closes(
     *,
+    history_release: Path,
     benchmark_code: str,
     start_date: date,
     end_date: date,
-) -> dict[date, Decimal]:
+) -> tuple[dict[date, Decimal], str, str]:
+    release_manifest = json.loads((history_release / "manifest.json").read_text(encoding="utf-8"))
+    catalog = TushareHistoryCatalog(Path(release_manifest["raw_state_path"]))
+    query_start = start_date - timedelta(days=40)
+    try:
+        local = load_index_history(
+            catalog,
+            index_code=benchmark_code,
+            start_date=query_start,
+            end_date=end_date,
+        )
+    except ValueError:
+        local = None
+    if local is not None:
+        closes = dict(local.closes)
+        if max(closes, default=date.min) >= end_date:
+            return closes, "verified_local_raw", local.source_fingerprint
+
     load_dotenv()
     token = os.environ.get("TUSHARE_TOKEN", "").strip()
     if not token:
-        raise ValueError("TUSHARE_TOKEN is required to retrieve the benchmark")
-    query_start = start_date - timedelta(days=40)
-    frame = ts.pro_api(token).index_daily(
+        raise ValueError(
+            f"benchmark {benchmark_code} is absent from verified local Raw and "
+            "TUSHARE_TOKEN is unavailable"
+        )
+    client = ts.pro_api(token)
+    client._DataApi__http_url = os.environ.get(
+        "TUSHARE_ENDPOINT",
+        "https://api.tushare.pro",
+    )
+    frame = client.index_daily(
         ts_code=benchmark_code,
         start_date=query_start.strftime("%Y%m%d"),
         end_date=end_date.strftime("%Y%m%d"),
@@ -109,7 +136,11 @@ def _benchmark_closes(
     }
     if max(closes, default=date.min) < end_date:
         raise ValueError("benchmark does not cover the requested common end date")
-    return closes
+    return (
+        closes,
+        "tushare_sdk_index_daily",
+        _hash({day.isoformat(): str(value) for day, value in sorted(closes.items())}),
+    )
 
 
 def _markdown(payload: dict[str, object]) -> str:
@@ -121,6 +152,8 @@ def _markdown(payload: dict[str, object]) -> str:
         f"- Factor: `{payload['factor_id']}@{payload['factor_version']}`",
         f"- Period: {payload['start_date']} to {payload['end_date']}",
         f"- Benchmark: `{payload['benchmark_code']}`",
+        f"- Benchmark source: `{payload['benchmark_source']}`",
+        f"- Validation status: `{payload['status']}`",
         f"- Frequency: `{payload['frequency']}`",
         f"- Initial equity per portfolio: {payload['initial_equity']}",
         f"- Benchmark total return: {Decimal(str(payload['benchmark_total_return'])):.4%}",
@@ -192,6 +225,12 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("comparison requires at least two ordered dates")
         spec = _factor_spec(args.factor_id, args.factor_version)
         admission = _verified_admission(args.admission, args.factor_id, args.factor_version)
+        benchmark_closes, benchmark_source, benchmark_source_hash = _benchmark_closes(
+            history_release=args.history_release,
+            benchmark_code=args.benchmark_code,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
         reader = MaterializedFactorReader(args.factor_materialization)
         if reader.manifest.data_release_id != admission["data_release_id"]:
             raise ValueError("factor materialization and admission data releases differ")
@@ -287,11 +326,6 @@ def main(argv: list[str] | None = None) -> int:
                 "final_state_hash": result.final_state_hash,
             }
 
-        benchmark_closes = _benchmark_closes(
-            benchmark_code=args.benchmark_code,
-            start_date=args.start_date,
-            end_date=args.end_date,
-        )
         benchmark = {
             item.month: item
             for item in monthly_benchmark_results(
@@ -341,8 +375,16 @@ def main(argv: list[str] | None = None) -> int:
         worst_total_return = Decimal(
             str(summary_by_tail[SelectionTail.WORST.value]["total_return"])
         )
+        factor_spread = best_total_return - worst_total_return
+        benchmark_excess = best_total_return - benchmark_total_return
+        if factor_spread <= 0:
+            validation_status = "FAILED_FACTOR_ORDERING"
+        elif benchmark_excess <= 0:
+            validation_status = "PASS_CROSS_SECTIONAL_ONLY"
+        else:
+            validation_status = "PASS_BENCHMARK_EXCESS"
         stable: dict[str, object] = {
-            "status": "PASS_RESEARCH_ONLY",
+            "status": validation_status,
             "factor_id": args.factor_id,
             "factor_version": args.factor_version,
             "expected_direction": int(spec.expected_direction),
@@ -353,9 +395,8 @@ def main(argv: list[str] | None = None) -> int:
             "target_fraction": str(args.target_fraction),
             "initial_equity": str(args.initial_equity),
             "benchmark_code": args.benchmark_code,
-            "benchmark_daily_hash": _hash(
-                {day.isoformat(): str(value) for day, value in sorted(benchmark_closes.items())}
-            ),
+            "benchmark_source": benchmark_source,
+            "benchmark_daily_hash": benchmark_source_hash,
             "data_release_id": reader.manifest.data_release_id,
             "history_release_id": history_release_id,
             "factor_materialization_hash": reader.manifest.content_hash,
@@ -365,8 +406,8 @@ def main(argv: list[str] | None = None) -> int:
             "rebalance_count": len(rebalance_dates),
             "portfolios": summary_by_tail,
             "benchmark_total_return": str(benchmark_total_return),
-            "best_minus_worst_total_return": str(best_total_return - worst_total_return),
-            "best_excess_benchmark_total_return": str(best_total_return - benchmark_total_return),
+            "best_minus_worst_total_return": str(factor_spread),
+            "best_excess_benchmark_total_return": str(benchmark_excess),
             "monthly": monthly,
         }
         content_hash = _hash(stable)

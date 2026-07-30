@@ -9,6 +9,7 @@ from aquant.backtest.event_engine.engine import StrategyContext
 from aquant.backtest.matching import OrderRequest
 from aquant.domain.enums import Exchange, Side
 from aquant.domain.identifiers import Symbol
+from aquant.domain.market_data import SecurityStatus
 from aquant.domain.time import require_aware
 
 
@@ -188,13 +189,20 @@ class SingleFactorEqualWeightStrategy:
         self._rebalance_dates = frozenset(rebalance_dates)
         self._config = config
         self._selector = SingleFactorSelector(config)
+        self._last_risk_state: dict[Symbol, SingleFactorObservation] = {}
 
     def on_close(self, context: StrategyContext) -> tuple[OrderRequest, ...]:
         trade_date = context.session.trade_date
         snapshot = self._snapshot(trade_date, context.session.close_at)
+        self._last_risk_state.update(
+            (observation.symbol, observation) for observation in snapshot.observations
+        )
         current = {position.symbol: position.quantity for position in context.portfolio.positions}
         if trade_date not in self._rebalance_dates:
-            return self._hard_exits(snapshot, current)
+            return self._hard_exits(
+                current,
+                context.session.status_by_symbol(),
+            )
 
         selection = self._selector.select(snapshot)
         bars = context.session.bar_by_symbol()
@@ -230,20 +238,32 @@ class SingleFactorEqualWeightStrategy:
         lots = (quantity / self._config.lot_size).to_integral_value(rounding=ROUND_FLOOR)
         return int(lots) * self._config.lot_size
 
-    @staticmethod
     def _hard_exits(
-        snapshot: SingleFactorSnapshot,
+        self,
         current: dict[Symbol, int],
+        session_statuses: Mapping[Symbol, SecurityStatus],
     ) -> tuple[OrderRequest, ...]:
         if not current:
             return ()
-        by_symbol = {item.symbol: item for item in snapshot.observations}
-        missing = tuple(symbol for symbol in current if symbol not in by_symbol)
+        missing = tuple(
+            symbol
+            for symbol in current
+            if symbol not in self._last_risk_state and symbol not in session_statuses
+        )
         if missing:
             raise ValueError(f"single-factor positions are missing risk state: {missing[:3]}")
         exits = (
             OrderRequest(symbol, Side.SELL, quantity)
             for symbol, quantity in current.items()
-            if by_symbol[symbol].is_st or by_symbol[symbol].is_delisting_risk
+            if (
+                (
+                    symbol in self._last_risk_state
+                    and (
+                        self._last_risk_state[symbol].is_st
+                        or self._last_risk_state[symbol].is_delisting_risk
+                    )
+                )
+                or (symbol in session_statuses and session_statuses[symbol].is_st)
+            )
         )
         return tuple(sorted(exits, key=lambda order: order.symbol))

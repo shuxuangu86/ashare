@@ -248,6 +248,38 @@ def test_non_rebalance_st_position_is_exited_at_next_open() -> None:
     assert [fill.side.value for fill in result.fills] == ["BUY", "SELL"]
 
 
+def test_non_rebalance_position_uses_session_status_when_factor_snapshot_is_missing() -> None:
+    config = SingleFactorConfig(
+        "amount_concentration_20d",
+        "1.0.0",
+        -1,
+        target_count=1,
+        minimum_constituents=1,
+    )
+    first = _snapshot(15, (0.1, 0.2))
+    second_base = _snapshot(16, (0.1, 0.2))
+    second = SingleFactorSnapshot(
+        second_base.trade_date,
+        second_base.asof_time,
+        (second_base.observations[1],),
+    )
+    result = EventDrivenBacktest(
+        run_id="single-factor-session-status-fallback",
+        initial_cash=Decimal("100000"),
+    ).run(
+        (_session(15), _session(16)),
+        SingleFactorEqualWeightStrategy(
+            snapshots={
+                date(2026, 7, 15): first,
+                date(2026, 7, 16): second,
+            },
+            rebalance_dates={date(2026, 7, 15)},
+            config=config,
+        ),
+    )
+    assert [fill.side.value for fill in result.fills] == ["BUY"]
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

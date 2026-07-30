@@ -177,6 +177,33 @@ deliberately excluded from Git.
 - Final gate: 653 tests passed with 88.42% coverage; Ruff and format passed,
   and mypy passed for 214 source files.
 
+### Strict-OOS single-factor excess-return validation
+
+- Extended the admitted `amount_concentration_20d` quintile comparison to the
+  untouched final 20% holdout: 2025-07-17 through 2026-07-17, 243 sessions and
+  51 weekly T-close/T+1-open rebalances.
+- The negative-direction best 20% returned 8.47% after costs versus -8.40% for
+  the worst 20%. The +16.86 percentage-point spread was positive in 10 of 13
+  calendar-month buckets and survived RMB 38.90 million of modeled friction.
+- The best portfolio did not beat CSI All Share, which returned 12.44%;
+  benchmark-relative excess was -3.97 percentage points. The benchmark was
+  retrieved once through the configured fixed-endpoint Tushare SDK.
+- Result status is `PASS_CROSS_SECTIONAL_ONLY`: the factor orders stocks in the
+  expected direction, but this test does not support a standalone long-only
+  benchmark-excess claim. The script checks verified local Raw before making a
+  single external benchmark request.
+- Fixed non-rebalance risk-state handling exposed by a ten-session market-data
+  gap in `688766.SH`: existing positions now carry only their latest known PIT
+  risk state, while new selection still requires current factor/risk data.
+- Artifact:
+  `artifacts/l4_single_factor_quantiles/single-factor-quintiles-amount_concentration_20d-125dbeb1ce83.json`;
+  content hash:
+  `125dbeb1ce83474390c48e9aa0d945cddb04f31c11a600f3f2c8a42043552954`.
+- Replaced the expired TinyShare dependency with `tushare==1.4.29`; credentials
+  and the fixed compatible HTTP endpoint remain only in ignored `.env`.
+- Final gate: 666 tests passed with 88.51% coverage; Ruff and format passed,
+  and mypy passed for 217 source files.
+
 ### CSI 300 replication backtest calibration
 
 - Added an immutable, hash-verified reader for local `index_weight` and
