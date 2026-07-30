@@ -1,0 +1,17 @@
+version: "1.0.0"
+release_status: DRAFT
+forward_horizons: [5, 10, 20, 40, 60]
+conditional_percentile_buckets:
+  - [0.0, 0.1]
+  - [0.1, 0.3]
+  - [0.3, 0.7]
+  - [0.7, 0.9]
+  - [0.9, 1.0]
+metrics:
+  - pearson_correlation
+  - spearman_correlation
+  - conditional_return_spread
+  - newey_west_t
+  - direction_hit_rate
+split_method: WALK_FORWARD
+random_split_allowed: false

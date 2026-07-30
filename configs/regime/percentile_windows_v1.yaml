@@ -1,0 +1,13 @@
+version: "1.0.0"
+method: PAST_ONLY_AVERAGE_TIE_EMPIRICAL_CDF
+windows:
+  3y:
+    sessions: 756
+    minimum_periods: 252
+  5y:
+    sessions: 1260
+    minimum_periods: 252
+  expanding:
+    minimum_periods: 252
+missing_policy: PRESERVE
+warmup_policy: REQUIRE_MINIMUM_PERIODS

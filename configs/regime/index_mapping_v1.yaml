@@ -1,0 +1,25 @@
+version: "1.0.0"
+indices:
+  HS300:
+    aliases: [000300.SH]
+  CSI500:
+    aliases: [000905.SH]
+  CSI800:
+    aliases: [000906.SH]
+  CSI1000:
+    aliases: [000852.SH]
+  CSI2000:
+    aliases: [932000.CSI]
+  DIVIDEND_INDEX:
+    aliases: [000922.CSI]
+  CHINEXT:
+    aliases: [399006.SZ]
+  STAR50:
+    aliases: [000688.SH]
+styles:
+  GROWTH:
+    status: DATA_DEPENDENCY_MISSING
+    note: A PIT-safe project index identifier must be configured before materialization.
+  VALUE:
+    status: DATA_DEPENDENCY_MISSING
+    note: A PIT-safe project index identifier must be configured before materialization.
