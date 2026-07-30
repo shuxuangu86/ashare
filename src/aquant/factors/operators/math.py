@@ -88,3 +88,8 @@ def where(condition: npt.ArrayLike, if_true: ArrayLike, if_false: ArrayLike) -> 
         np.asarray(if_false, dtype=np.float64),
     )
     return np.where(np.isfinite(result), result, np.nan)
+
+
+def conditional(condition: npt.ArrayLike, if_true: ArrayLike, if_false: ArrayLike) -> Array:
+    """Named alias used by formula libraries for deterministic vector conditions."""
+    return where(condition, if_true, if_false)

@@ -469,6 +469,44 @@ def ema(values: npt.ArrayLike, span: int, *, min_periods: int = 1) -> Array:
     return _restore(result, squeezed)
 
 
+def wma(values: npt.ArrayLike, window: int, *, min_periods: int | None = None) -> Array:
+    """Trailing linearly weighted moving average, newest observation has weight ``window``."""
+    return _rolling(
+        values,
+        window=window,
+        min_periods=min_periods,
+        null_policy="omit",
+        alignment="trailing",
+        reducer=lambda x: float(np.average(x, weights=np.arange(1, len(x) + 1))),
+    )
+
+
+def sma_cn(
+    values: npt.ArrayLike,
+    window: int,
+    weight: int = 1,
+    *,
+    min_periods: int = 1,
+) -> Array:
+    """Chinese indicator SMA(X,N,M): Y[t]=(M*X[t]+(N-M)*Y[t-1])/N."""
+    if window <= 0 or weight <= 0 or weight > window or min_periods <= 0:
+        raise ValueError("SMA window/weight/min_periods must satisfy 0 < weight <= window")
+    matrix, squeezed = _matrix(values)
+    result = np.full(matrix.shape, np.nan)
+    alpha = weight / window
+    for column in range(matrix.shape[1]):
+        state = np.nan
+        count = 0
+        for row, value in enumerate(matrix[:, column]):
+            if not np.isfinite(value):
+                continue
+            count += 1
+            state = value if not np.isfinite(state) else alpha * value + (1 - alpha) * state
+            if count >= min_periods:
+                result[row, column] = state
+    return _restore(result, squeezed)
+
+
 def decay_linear(values: npt.ArrayLike, window: int, *, min_periods: int | None = None) -> Array:
     return _rolling(
         values,
