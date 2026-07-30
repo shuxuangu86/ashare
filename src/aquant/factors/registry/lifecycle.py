@@ -114,9 +114,7 @@ class FactorRegistry:
             if target in {
                 FactorStatus.PRODUCTION,
                 FactorStatus.STANDALONE_PRODUCTION_ALPHA,
-            } and (
-                gate_decision is None or not gate_decision.passed
-            ):
+            } and (gate_decision is None or not gate_decision.passed):
                 raise FactorRegistryError("production transition requires a passing gate decision")
             if gate_decision is not None:
                 evidence_hash = gate_decision.evidence_hash

@@ -233,8 +233,7 @@ def _implementation_status(factors: tuple[AtomicFactor, ...]) -> dict[str, Any]:
                 "source_id": "SRC_ALPHA101",
                 "status": "FORMULA_AMBIGUOUS",
                 "notes": (
-                    "Formula-by-formula transcription and VWAP/industry semantics "
-                    "remain pending."
+                    "Formula-by-formula transcription and VWAP/industry semantics remain pending."
                 ),
             },
             {
