@@ -45,6 +45,7 @@ Alpha101/191 没有在缺少逐公式审计和授权本地来源时伪报 EXACT�
 | 数据发布 | `cn_equity_20260717_001` |
 | horizons | 1、5、10、20、40 |
 | 首批评价 | `technical_classic_level_v1`，98 个新因子 |
+| 评价任务 | RUNNING；PID 17752；代码 `0b17e4c` |
 | OOS | 最终 20% 时间段；固定时序切分 |
 | 批处理 | batch 8、逐批重载、resume、单进程 |
 | 股票日数量 | PENDING |
