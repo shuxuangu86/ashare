@@ -5,7 +5,7 @@ from pathlib import Path
 from aquant.factors.evaluation import FactorApprovalStatus
 from aquant.factors.evaluation.gates import GateDecision
 from aquant.factors.exceptions import FactorRegistryError
-from aquant.factors.lifecycle import production_eligible, require_transition
+from aquant.factors.lifecycle import feature_eligible, production_eligible, require_transition
 from aquant.factors.mining import FactorCandidate
 from aquant.factors.spec import FactorSpec, FactorStatus
 
@@ -111,7 +111,10 @@ class FactorRegistry:
             spec = self._specs[key]
             require_transition(spec.status, target)
             prior_evidence = self._evidence[key]
-            if target is FactorStatus.PRODUCTION and (
+            if target in {
+                FactorStatus.PRODUCTION,
+                FactorStatus.STANDALONE_PRODUCTION_ALPHA,
+            } and (
                 gate_decision is None or not gate_decision.passed
             ):
                 raise FactorRegistryError("production transition requires a passing gate decision")
@@ -119,6 +122,9 @@ class FactorRegistry:
                 evidence_hash = gate_decision.evidence_hash
             if target in {
                 FactorStatus.VALIDATED,
+                FactorStatus.RESEARCH_VALIDATED,
+                FactorStatus.FEATURE_ELIGIBLE,
+                FactorStatus.STANDALONE_PRODUCTION_ALPHA,
                 FactorStatus.APPROVED,
                 FactorStatus.PAPER_TRADING,
                 FactorStatus.PRODUCTION,
@@ -153,6 +159,10 @@ class FactorRegistry:
 
     def production_specs(self) -> tuple[FactorSpec, ...]:
         return tuple(spec for spec in self.specs() if production_eligible(spec.status))
+
+    def feature_specs(self) -> tuple[FactorSpec, ...]:
+        """Return the broad L2 pool available to L3, independent of strict production gates."""
+        return tuple(spec for spec in self.specs() if feature_eligible(spec.status))
 
     def _persist(self, spec: FactorSpec, *, evidence_hash: str | None) -> None:
         if self._connection is None:

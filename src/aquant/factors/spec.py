@@ -25,6 +25,9 @@ class FactorStatus(StrEnum):
     DRAFT = "DRAFT"
     COMPUTED = "COMPUTED"
     VALIDATED = "VALIDATED"
+    RESEARCH_VALIDATED = "RESEARCH_VALIDATED"
+    FEATURE_ELIGIBLE = "FEATURE_ELIGIBLE"
+    STANDALONE_PRODUCTION_ALPHA = "STANDALONE_PRODUCTION_ALPHA"
     REDUNDANT = "REDUNDANT"
     CONDITIONAL = "CONDITIONAL"
     RISK_ONLY = "RISK_ONLY"
@@ -34,6 +37,7 @@ class FactorStatus(StrEnum):
     DECAYED = "DECAYED"
     ARCHIVED = "ARCHIVED"
     DEPRECATED = "DEPRECATED"
+    REJECTED = "REJECTED"
     UNAVAILABLE = "UNAVAILABLE"
 
 
@@ -42,6 +46,36 @@ class SourceType(StrEnum):
     FORMULA = "FORMULA"
     GENERATED = "GENERATED"
     PUBLISHED = "PUBLISHED"
+    ACADEMIC_PAPER = "ACADEMIC_PAPER"
+    BROKER_REPORT = "BROKER_REPORT"
+    FORMULA_LIBRARY = "FORMULA_LIBRARY"
+    TECHNICAL_INDICATOR_STANDARD = "TECHNICAL_INDICATOR_STANDARD"
+    OPEN_SOURCE_REFERENCE = "OPEN_SOURCE_REFERENCE"
+
+
+class FactorRole(StrEnum):
+    ALPHA_CANDIDATE = "ALPHA_CANDIDATE"
+    RISK_FACTOR = "RISK_FACTOR"
+    CONTROL_FEATURE = "CONTROL_FEATURE"
+    STATE_FEATURE = "STATE_FEATURE"
+    UNKNOWN = "UNKNOWN"
+
+
+class SourceFaithfulness(StrEnum):
+    EXACT = "EXACT"
+    NORMALIZED_EQUIVALENT = "NORMALIZED_EQUIVALENT"
+    A_SHARE_ADAPTED = "A_SHARE_ADAPTED"
+    CORRECTED_AMBIGUITY = "CORRECTED_AMBIGUITY"
+    DERIVED_VARIANT = "DERIVED_VARIANT"
+
+
+class ImplementationStatus(StrEnum):
+    IMPLEMENTED = "IMPLEMENTED"
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
+    FORMULA_AMBIGUOUS = "FORMULA_AMBIGUOUS"
+    DATA_DEPENDENCY_MISSING = "DATA_DEPENDENCY_MISSING"
+    IMPLEMENTATION_FAILED = "IMPLEMENTATION_FAILED"
+    DEFERRED_INTRADAY = "DEFERRED_INTRADAY"
 
 
 class FactorSpec(BaseModel):
@@ -53,6 +87,8 @@ class FactorSpec(BaseModel):
     name: str
     description: str
     family: str
+    subfamily: str = "unspecified"
+    role: FactorRole = FactorRole.UNKNOWN
     layer: FactorLayer
     version: str
     status: FactorStatus = FactorStatus.DRAFT
@@ -72,8 +108,22 @@ class FactorSpec(BaseModel):
     preprocessing: tuple[str, ...] = ()
     neutralization: tuple[str, ...] = ()
     parameters: dict[str, Any] = Field(default_factory=dict)
+    required_datasets: tuple[str, ...] = ("bars_1d",)
+    minimum_periods: int | None = Field(default=None, ge=1)
+    availability_lag: int | None = Field(default=None, ge=0)
+    normalization: str = "NONE"
+    missing_policy: str = "PRESERVE"
+    warmup_policy: str = "REQUIRE_MINIMUM_PERIODS"
     source_type: SourceType
     source_reference: str
+    source_id: str = "SRC_AQUANT_INTERNAL"
+    source_section: str | None = None
+    source_formula_id: str | None = None
+    source_page: str | None = None
+    source_faithfulness: SourceFaithfulness = SourceFaithfulness.DERIVED_VARIANT
+    implementation_notes: str = ""
+    variant_of: str | None = None
+    implementation_status: ImplementationStatus = ImplementationStatus.IMPLEMENTED
     tags: tuple[str, ...] = ()
     complexity_score: float = Field(ge=0)
     expression_hash: str = ""
@@ -85,10 +135,15 @@ class FactorSpec(BaseModel):
         "name",
         "description",
         "family",
+        "subfamily",
         "version",
         "hypothesis",
         "universe",
         "source_reference",
+        "source_id",
+        "normalization",
+        "missing_policy",
+        "warmup_policy",
     )
     @classmethod
     def _not_blank(cls, value: str) -> str:
@@ -102,6 +157,13 @@ class FactorSpec(BaseModel):
     def _unique_tuple(cls, value: tuple[Any, ...]) -> tuple[Any, ...]:
         if len(value) != len(set(value)):
             raise ValueError("factor metadata lists must not contain duplicates")
+        return value
+
+    @field_validator("required_datasets")
+    @classmethod
+    def _unique_datasets(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value or len(value) != len(set(value)) or any(not item.strip() for item in value):
+            raise ValueError("required_datasets must be non-empty and unique")
         return value
 
     @field_validator("target_horizons")
@@ -126,6 +188,10 @@ class FactorSpec(BaseModel):
             raise ValueError("factor validity interval is inverted")
         if self.factor_id in self.parent_factor_ids:
             raise ValueError("factor cannot be its own parent")
+        if self.minimum_periods is None:
+            object.__setattr__(self, "minimum_periods", max(1, self.required_history))
+        if self.availability_lag is None:
+            object.__setattr__(self, "availability_lag", self.data_lag)
         canonical = self.canonical_expression
         digest = hashlib.sha256(canonical.encode()).hexdigest()
         if self.expression_hash and self.expression_hash != digest:
