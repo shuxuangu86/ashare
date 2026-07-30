@@ -16,6 +16,7 @@ from aquant.factors.atomic import (
     AtomicFactor,
     baseline_factor_library,
     second_wave_candidate_library,
+    technical_factor_library_v2,
 )
 from aquant.factors.data_loader import StandardPITFactorLoader
 from aquant.factors.evaluation import (
@@ -57,13 +58,27 @@ def parse_date(value: str) -> date:
 def selected_factors(value: str) -> tuple[AtomicFactor, ...]:
     baseline = baseline_factor_library()
     second_wave = second_wave_candidate_library()
-    library = (*baseline, *second_wave)
+    technical = technical_factor_library_v2()
+    legacy = (*baseline, *second_wave)
+    library = (*legacy, *technical)
     if value == "baseline_v1":
         return baseline
     if value == "second_wave_v1":
         return second_wave
     if value == "all":
+        return legacy
+    if value == "technical_v2":
+        return technical
+    if value == "l2_v2":
         return library
+    if value.startswith("technical_") and value.endswith("_v1"):
+        selected = tuple(
+            factor
+            for factor in technical
+            if value in factor.spec.parameters.get("factor_packs", ())
+        )
+        if selected:
+            return selected
     requested = tuple(item.strip() for item in value.split(",") if item.strip())
     by_id = {factor.spec.factor_id: factor for factor in library}
     missing = set(requested) - by_id.keys()

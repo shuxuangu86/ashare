@@ -458,6 +458,12 @@ def _price_volume_factors() -> tuple[AtomicFactor, ...]:
             ),
             "Close deviation from daily amount-weighted average price.",
             "Closing pressure relative to VWAP captures late-session demand.",
+            parameters={
+                "vwap_derivation": "amount_cny / volume_shares",
+                "amount_unit": "CNY",
+                "volume_unit": "shares",
+                "unit_validation": "standardized bars_1d publisher contract",
+            },
         ),
         _custom(
             "volume_price_divergence",
