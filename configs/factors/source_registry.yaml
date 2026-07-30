@@ -7,10 +7,12 @@ sources:
     source_type: FORMULA_LIBRARY
     identifier: arXiv:1601.00991
     public_access_status: PUBLIC
+    local_file: null
+    content_hash: 1f9c21afe32dcb3ee77b31548acdaea00451fbfa1c0ee10c907867bcc736fce9
     factor_families: [formula_alpha, price_volume]
     required_data: [bars_1d, vwap, industry_pit]
-    implementation_status: FORMULA_AMBIGUOUS
-    notes: Formula-by-formula transcription audit is pending; inferred VWAP is prohibited.
+    implementation_status: IMPLEMENTED
+    notes: 101/101 formulas registered; derived VWAP and industry adaptations are explicitly labeled.
   - source_id: SRC_GTJA_ALPHA191
     title: 基于短周期价量特征的多因子选股体系
     authors_or_institution: 国泰君安证券; 李辰; 刘富兵
@@ -18,10 +20,12 @@ sources:
     source_type: BROKER_REPORT
     identifier: 国泰君安数量化专题之九十三
     public_access_status: METADATA_ONLY
+    local_file: null
+    content_hash: 863f62c2e23bd87ddb42b8338c8fe2b0276d94260ac985e1a0edfff318693c6c
     factor_families: [formula_alpha, price_volume]
     required_data: [bars_1d, vwap, industry_pit]
-    implementation_status: SOURCE_UNAVAILABLE
-    notes: No licensed local report; public transcriptions require ambiguity audit.
+    implementation_status: IMPLEMENTED
+    notes: User-supplied local PDF audited; 190/191 executable and Alpha143 remains FORMULA_AMBIGUOUS.
   - source_id: SRC_BOC_TECH_20230913
     title: 基于经典技术指标构建选股多因子框架
     authors_or_institution: 中银证券; 郭策

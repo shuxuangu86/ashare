@@ -14,7 +14,9 @@ from aquant.domain.data_release import DataReleaseId
 from aquant.factors.aggregation import ModelKind, walk_forward_predict
 from aquant.factors.atomic import (
     AtomicFactor,
+    alpha101_original_library,
     baseline_factor_library,
+    gtja191_original_library,
     second_wave_candidate_library,
     technical_factor_library_v2,
 )
@@ -59,8 +61,11 @@ def selected_factors(value: str) -> tuple[AtomicFactor, ...]:
     baseline = baseline_factor_library()
     second_wave = second_wave_candidate_library()
     technical = technical_factor_library_v2()
+    alpha101 = alpha101_original_library()
+    alpha191 = gtja191_original_library()
     legacy = (*baseline, *second_wave)
-    library = (*legacy, *technical)
+    published = (*alpha101, *alpha191)
+    library = (*legacy, *technical, *published)
     if value == "baseline_v1":
         return baseline
     if value == "second_wave_v1":
@@ -69,6 +74,12 @@ def selected_factors(value: str) -> tuple[AtomicFactor, ...]:
         return legacy
     if value == "technical_v2":
         return technical
+    if value == "alpha101_original_v1":
+        return alpha101
+    if value == "alpha191_original_v1":
+        return alpha191
+    if value == "published_formulas_v1":
+        return published
     if value == "l2_v2":
         return library
     if value.startswith("technical_") and value.endswith("_v1"):

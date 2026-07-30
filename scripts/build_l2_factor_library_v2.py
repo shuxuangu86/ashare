@@ -14,7 +14,9 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 
 from aquant.factors.atomic import (
+    alpha101_original_library,
     baseline_factor_library,
+    gtja191_original_library,
     second_wave_candidate_library,
     technical_factor_library_v2,
 )
@@ -49,11 +51,16 @@ def main() -> int:
     baseline = baseline_factor_library()
     second_wave = second_wave_candidate_library()
     technical = technical_factor_library_v2()
+    alpha101 = alpha101_original_library()
+    alpha191 = gtja191_original_library()
     packs = {
         "baseline_v1": baseline,
         "second_wave_v1": second_wave,
         "technical_v2": technical,
-        "all": (*baseline, *second_wave, *technical),
+        "alpha101_original_v1": alpha101,
+        "alpha191_original_v1": alpha191,
+        "published_formulas_v1": (*alpha101, *alpha191),
+        "all": (*baseline, *second_wave, *technical, *alpha101, *alpha191),
     }
     if args.factor_pack not in packs:
         raise ValueError(f"unknown factor pack: {args.factor_pack}")
@@ -134,6 +141,8 @@ def main() -> int:
         "input_hash": input_hash,
         "factor_count": len(factors),
         "new_technical_factor_count": len(technical),
+        "alpha101_factor_count": len(alpha101),
+        "alpha191_factor_count": len(alpha191),
         "batch_size": args.batch_size,
         "max_workers": args.max_workers,
         "elapsed_seconds": elapsed,
@@ -225,23 +234,21 @@ def _source_coverage(
 
 def _implementation_status(factors: tuple[AtomicFactor, ...]) -> dict[str, Any]:
     counts = Counter(str(factor.spec.implementation_status) for factor in factors)
+    ambiguities = [
+        {
+            "factor_id": factor.spec.factor_id,
+            "source_id": factor.spec.source_id,
+            "source_formula_id": factor.spec.source_formula_id,
+            "status": str(factor.spec.implementation_status),
+            "notes": factor.spec.implementation_notes,
+        }
+        for factor in factors
+        if str(factor.spec.implementation_status) == "FORMULA_AMBIGUOUS"
+    ]
     return {
         "schema_version": "aquant.factor-implementation-status.v2",
         "counts": dict(sorted(counts.items())),
-        "formula_ambiguities": [
-            {
-                "source_id": "SRC_ALPHA101",
-                "status": "FORMULA_AMBIGUOUS",
-                "notes": (
-                    "Formula-by-formula transcription and VWAP/industry semantics remain pending."
-                ),
-            },
-            {
-                "source_id": "SRC_GTJA_ALPHA191",
-                "status": "SOURCE_UNAVAILABLE",
-                "notes": "No licensed local report; public transcriptions are not marked EXACT.",
-            },
-        ],
+        "formula_ambiguities": ambiguities,
         "deferred_intraday": [
             {
                 "source_id": "SRC_DONGWU_TECH_SERIES",
