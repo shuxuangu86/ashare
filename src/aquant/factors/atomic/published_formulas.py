@@ -721,6 +721,16 @@ def _adopted_formula(source_id: str, formula_id: int, formula: str) -> str:
 def _required_fields(formula: str) -> tuple[str, ...]:
     lower = formula.lower()
     fields = {field for field in _FIELD_NAMES if re.search(rf"\b{field}\b", lower)}
+    derived_dependencies = {
+        "tr": {"high", "low", "close"},
+        "hd": {"high"},
+        "ld": {"low"},
+        "dtm": {"open", "high"},
+        "dbm": {"open", "low"},
+    }
+    for name, dependencies in derived_dependencies.items():
+        if re.search(rf"\b{name}\b", lower):
+            fields.update(dependencies)
     if re.search(r"\bvol\b", lower):
         fields.add("volume")
     if "ret" in lower or "returns" in lower:

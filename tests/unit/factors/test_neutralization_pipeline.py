@@ -157,3 +157,50 @@ def test_size_only_neutralization_marks_missing_cap_without_industry() -> None:
     )
     assert result.neutralization_status[0, 0] == "MISSING_MARKET_CAP"
     assert np.count_nonzero(result.neutralization_status == "VALID") == 29
+
+
+def test_industry_proxy_preserves_unknown_industries_and_removes_style_exposure() -> None:
+    dates = (date(2024, 1, 2), date(2024, 1, 3))
+    groups = np.array(
+        [["bank"] * 15 + ["tech"] * 15 + [None] * 10] * len(dates),
+        dtype=object,
+    )
+    cap = np.broadcast_to(np.linspace(1e9, 5e10, 40), (len(dates), 40)).copy()
+    available = np.array([[value] * 40 for value in dates], dtype=object)
+    size = np.log(cap)
+    beta = np.broadcast_to(np.linspace(-1, 1, 40), cap.shape).copy()
+    beta[0, 35] = np.nan
+    values = size + 2 * (groups == "tech") + 0.5 * np.nan_to_num(beta)
+    result = neutralize_pit_factor(
+        values,
+        PITExposurePanel(dates, groups, cap, available),
+        method="industry_proxy",
+        style_exposures={"beta": beta, "size": size},
+    )
+    assert all(item.status == "PROXY_PASS" for item in result.diagnostics)
+    assert np.all(np.isfinite(result.neutralized_value))
+    assert np.all(result.neutralization_status == "VALID_PROXY")
+    assert abs(result.diagnostics[0].size_correlation_after or 0) < 1e-10
+
+
+def test_industry_proxy_requires_aligned_style_exposures() -> None:
+    dates = (date(2024, 1, 2),)
+    exposures = PITExposurePanel(
+        dates,
+        np.array([["bank"] * 20 + [None] * 10], dtype=object),
+        np.linspace(1e9, 3e10, 30)[None, :],
+        np.array([[dates[0]] * 30], dtype=object),
+    )
+    with pytest.raises(ValueError, match="requires PIT style"):
+        neutralize_pit_factor(
+            np.arange(30, dtype=float)[None, :],
+            exposures,
+            method="industry_proxy",
+        )
+    with pytest.raises(ValueError, match="must align"):
+        neutralize_pit_factor(
+            np.arange(30, dtype=float)[None, :],
+            exposures,
+            method="industry_proxy",
+            style_exposures={"beta": np.ones((2, 30))},
+        )

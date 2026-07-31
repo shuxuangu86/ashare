@@ -1,3 +1,4 @@
+import re
 from datetime import date, timedelta
 
 import numpy as np
@@ -76,6 +77,18 @@ def test_published_formula_faithfulness_and_ambiguity_are_explicit() -> None:
         "raw_formula" in factor.spec.parameters and "adopted_formula" in factor.spec.parameters
         for factor in alpha191
     )
+
+
+def test_gtja_derived_names_declare_their_underlying_input_fields() -> None:
+    alpha191 = gtja191_original_library()
+    assert set(alpha191[68].spec.input_fields) >= {"open", "high", "low"}
+    tr_factors = [
+        factor
+        for factor in alpha191
+        if re.search(r"\bTR\b", str(factor.spec.parameters["adopted_formula"]), re.IGNORECASE)
+    ]
+    assert tr_factors
+    assert all(set(factor.spec.input_fields) >= {"high", "low", "close"} for factor in tr_factors)
 
 
 def test_all_executable_published_formulas_are_deterministic() -> None:

@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal
@@ -160,7 +161,8 @@ def neutralize_pit_factor(
     values: npt.ArrayLike,
     exposures: PITExposurePanel,
     *,
-    method: Literal["industry", "size", "industry_size"] = "industry_size",
+    method: Literal["industry", "size", "industry_size", "industry_proxy"] = "industry_size",
+    style_exposures: Mapping[str, npt.ArrayLike] | None = None,
     minimum_observations: int = 20,
     minimum_industry_observations: int = 3,
     winsorize_scale: float = 3.0,
@@ -170,13 +172,23 @@ def neutralize_pit_factor(
         raise ValueError("factor and PIT exposure panels must align")
     winsorized = np.vstack([winsorize_mad(row, scale=winsorize_scale) for row in raw])
     normalized = np.vstack([zscore(row) for row in winsorized])
-    variants = neutralization_variants(
-        normalized,
-        exposures,
-        minimum_observations=minimum_observations,
-        minimum_industry_observations=minimum_industry_observations,
-    )
-    neutralized = variants[f"{method}_neutral"]
+    proxy_designs: tuple[Array, ...] | None = None
+    if method == "industry_proxy":
+        neutralized, proxy_designs = _industry_style_proxy_neutralize(
+            normalized,
+            exposures,
+            style_exposures,
+            minimum_observations=minimum_observations,
+            minimum_industry_observations=minimum_industry_observations,
+        )
+    else:
+        variants = neutralization_variants(
+            normalized,
+            exposures,
+            minimum_observations=minimum_observations,
+            minimum_industry_observations=minimum_industry_observations,
+        )
+        neutralized = variants[f"{method}_neutral"]
     statuses = np.full(raw.shape, "MISSING_FACTOR_VALUE", dtype=object)
     diagnostics: list[NeutralizationDiagnostics] = []
     for row, trade_date in enumerate(exposures.trade_dates):
@@ -192,7 +204,10 @@ def neutralize_pit_factor(
         )
         statuses[row, finite_factor & raw_known_industry] = "SMALL_INDUSTRY"
         known_industry = np.asarray([value is not None for value in groups])
-        if method == "size":
+        if method == "industry_proxy":
+            eligible = finite_factor
+            statuses[row, finite_factor] = "INSUFFICIENT_CROSS_SECTION"
+        elif method == "size":
             eligible = finite_factor & np.isfinite(caps) & (caps > 0)
             statuses[row, finite_factor] = "MISSING_MARKET_CAP"
         else:
@@ -200,8 +215,8 @@ def neutralize_pit_factor(
             eligible = finite_factor & known_industry & np.isfinite(caps) & (caps > 0)
         statuses[row, eligible] = "INSUFFICIENT_CROSS_SECTION"
         valid = np.isfinite(neutralized[row])
-        statuses[row, valid] = "VALID"
-        design = industry_exposures(groups)
+        statuses[row, valid] = "VALID_PROXY" if method == "industry_proxy" else "VALID"
+        design = proxy_designs[row] if proxy_designs is not None else industry_exposures(groups)
         if method == "industry_size":
             size = np.full(caps.shape, np.nan)
             size[np.isfinite(caps) & (caps > 0)] = np.log(caps[np.isfinite(caps) & (caps > 0)])
@@ -209,7 +224,14 @@ def neutralize_pit_factor(
         diagnostics.append(
             NeutralizationDiagnostics(
                 trade_date=trade_date,
-                status="PASS" if np.count_nonzero(valid) >= minimum_observations else "BLOCKED",
+                status=(
+                    "PROXY_PASS"
+                    if method == "industry_proxy"
+                    and np.count_nonzero(valid) >= minimum_observations
+                    else "PASS"
+                    if np.count_nonzero(valid) >= minimum_observations
+                    else "BLOCKED"
+                ),
                 observations=int(np.count_nonzero(valid)),
                 industries=len({str(value) for value in groups if value is not None}),
                 design_rank=int(np.linalg.matrix_rank(design[eligible]))
@@ -227,6 +249,59 @@ def neutralize_pit_factor(
         neutralization_status=statuses,
         diagnostics=tuple(diagnostics),
     )
+
+
+def _industry_style_proxy_neutralize(
+    values: Array,
+    exposures: PITExposurePanel,
+    style_exposures: Mapping[str, npt.ArrayLike] | None,
+    *,
+    minimum_observations: int,
+    minimum_industry_observations: int,
+) -> tuple[Array, tuple[Array, ...]]:
+    if not style_exposures:
+        raise ValueError("industry proxy neutralization requires PIT style exposures")
+    resolved_styles = {
+        name: np.asarray(style_exposures[name], dtype=float) for name in sorted(style_exposures)
+    }
+    if any(style.shape != values.shape for style in resolved_styles.values()):
+        raise ValueError("industry proxy style exposures must align with factor values")
+    output = np.full(values.shape, np.nan)
+    designs: list[Array] = []
+    for row in range(len(values)):
+        groups = _eligible_groups(
+            exposures.industries[row],
+            minimum_industry_observations=minimum_industry_observations,
+        )
+        unknown = np.asarray(
+            [float(value is None or not str(value).strip()) for value in groups],
+            dtype=float,
+        )
+        columns = [industry_exposures(groups), unknown[:, None]]
+        for name, style in resolved_styles.items():
+            style_row = zscore(style[row] if name == "size" else winsorize_mad(style[row]))
+            missing = ~np.isfinite(style_row)
+            style_row[missing] = 0
+            columns.append(style_row[:, None])
+            if np.any(missing) and np.any(~missing):
+                columns.append(missing.astype(float)[:, None])
+        design = np.column_stack(columns)
+        nonconstant = np.nanstd(design, axis=0) > 1e-12
+        design = design[:, nonconstant]
+        designs.append(design)
+        market_cap = exposures.float_market_cap[row]
+        valid_cap = np.isfinite(market_cap) & (market_cap > 0)
+        fallback_weight = (
+            float(np.nanmedian(np.sqrt(market_cap[valid_cap]))) if np.any(valid_cap) else 1.0
+        )
+        weights = np.where(valid_cap, np.sqrt(market_cap), fallback_weight)
+        output[row] = multi_exposure_neutralize(
+            values[row],
+            design,
+            weights=weights,
+            minimum_observations=minimum_observations,
+        )
+    return output, tuple(designs)
 
 
 def _eligible_groups(

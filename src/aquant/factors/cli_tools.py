@@ -102,6 +102,10 @@ def selected_factors(value: str) -> tuple[AtomicFactor, ...]:
         )
     if value == "l2_v2":
         return library
+    if value == "l2_v2_executable":
+        return tuple(
+            factor for factor in library if factor.spec.implementation_status.value == "IMPLEMENTED"
+        )
     if value.startswith("technical_") and value.endswith("_v1"):
         selected = tuple(
             factor
@@ -181,14 +185,27 @@ def _verified_industry_quality(
     data_release_id: str,
     start_date: date,
     end_date: date,
+    allow_coverage_only_blocked: bool = False,
 ) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     expected = payload.pop("content_hash", None)
     payload.pop("created_at", None)
     if expected != _hash(payload):
         raise ValueError("industry quality report content hash mismatch")
-    if payload.get("status") != "PASS":
-        raise ValueError("neutral evaluation requires a passing industry quality report")
+    status = payload.get("status")
+    coverage_only_blocked = bool(
+        allow_coverage_only_blocked
+        and status == "BLOCKED"
+        and set(payload.get("failure_reason_codes", ()))
+        <= {"YEAR_MARKET_ROW_COVERAGE_BELOW_THRESHOLD"}
+        and float(payload.get("market_row_coverage", 0)) >= 0.9
+        and int(payload.get("conflicting_rows", 1)) == 0
+        and int(payload.get("invalid_intervals", 1)) == 0
+        and not payload.get("orphan_industry_codes")
+        and int(payload.get("available_after_effective_session", 1)) == 0
+    )
+    if status != "PASS" and not coverage_only_blocked:
+        raise ValueError("neutral evaluation requires an acceptable industry quality report")
     if payload.get("data_release_id") != data_release_id:
         raise ValueError("industry quality data release does not match evaluation")
     if payload.get("industry_release_hash") != industry_repository.content_hash:
@@ -287,7 +304,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--neutralization",
-        choices=("raw", "size", "industry", "industry_size"),
+        choices=("raw", "size", "industry", "industry_size", "industry_proxy"),
         default="raw",
     )
     parser.add_argument("--industry-release", type=Path)
@@ -308,7 +325,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
             raise ValueError("evaluation horizons, costs, batch and OOS fraction are invalid")
         industry_repository: IndustryPITRepository | None = None
         industry_quality: dict[str, Any] | None = None
-        if args.neutralization in {"industry", "industry_size"}:
+        if args.neutralization in {"industry", "industry_size", "industry_proxy"}:
             if args.industry_release is None or args.industry_quality_report is None:
                 raise ValueError(
                     "neutral evaluation requires --industry-release and --industry-quality-report"
@@ -320,6 +337,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                 data_release_id=str(args.data_release_id),
                 start_date=args.start_date,
                 end_date=args.end_date,
+                allow_coverage_only_blocked=args.neutralization == "industry_proxy",
             )
         if args.dry_run:
             _print({"status": "DRY_RUN", "factor_count": len(factors), "horizons": horizons})
@@ -470,9 +488,15 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                         values,
                         pit_exposures,
                         method=cast(
-                            Literal["industry", "size", "industry_size"],
+                            Literal[
+                                "industry",
+                                "size",
+                                "industry_size",
+                                "industry_proxy",
+                            ],
                             args.neutralization,
                         ),
+                        style_exposures=exposures,
                     ).neutralized_value
                 if convergence_cache is not None:
                     convergence_cache.write(factor.spec.factor_id, values)
@@ -551,6 +575,11 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                                 "industry_quality_hash": (
                                     industry_quality["content_hash"]
                                     if industry_quality is not None
+                                    else None
+                                ),
+                                "industry_proxy_policy": (
+                                    "observed_pit_l1_plus_unknown_and_pit_style_exposures"
+                                    if args.neutralization == "industry_proxy"
                                     else None
                                 ),
                             },
