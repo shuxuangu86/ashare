@@ -34,6 +34,14 @@ Runtime golden-panel audit passes 291/292: Alpha101 passes 101/101 and GTJA pass
 Faithfulness is split into `EXACT`, `NORMALIZED_EQUIVALENT`, `A_SHARE_ADAPTED`, and
 `CORRECTED_AMBIGUITY`; raw and adopted expressions are stored side by side.
 
+The academic extension layer adds 707 registrations. Han–Yang–Zhou contributes seven
+auditable components and six two-component interactions. The China 7,000-rules source
+contributes a declared, hash-stable 687-trial daily search space across filter, moving
+average, support/resistance, channel breakout, and OBV-average families. Technical
+sentiment contributes seven aggregates over ten pre-declared signals, without selecting
+rules on the test period. Fama–French reuses the existing PIT size and book-to-market
+features; operating profitability and investment remain dependency-gated.
+
 The catalog maps candidates into the requested representation packs and the family packs
 `technical_trend_v1`, `technical_momentum_v1`, `technical_reversal_v1`,
 `technical_oscillator_v1`, `technical_channel_v1`, `technical_volatility_v1`,
@@ -49,9 +57,10 @@ instability. It does not require high standalone ICIR or cost-adjusted strategy 
 
 Family selection combines a Pareto frontier with required archetypes: strongest,
 most stable, lowest turnover, most independent, and most regime-complementary.
-Benjamini-Hochberg FDR remains available in the existing evaluation package. L3 uses
-time-ordered walk-forward aggregation with purge and embargo; all L3 results remain
-`RESEARCH_ONLY` until L4 strategy validation.
+Benjamini-Hochberg FDR, family-level summaries, and a deterministic stationary-bootstrap
+SPA interface are available in the evaluation package. L3 uses time-ordered walk-forward
+aggregation with purge and embargo; all L3 results remain `RESEARCH_ONLY` until L4
+strategy validation.
 
 ## Reproducibility and batch operation
 
@@ -73,7 +82,10 @@ output/predictive deduplication, and family selection complete.
 ## Explicit partial/deferred scope
 
 - `IMPLEMENTED`: Alpha101 101/101 and GTJA Alpha191 190/191 are executable.
+- `IMPLEMENTED`: Han–Yang–Zhou 13, China controlled rules 687, technical sentiment 7.
 - `PARTIAL`: GTJA Alpha143 remains `FORMULA_AMBIGUOUS`; no guessed `SELF` semantics.
+- `PARTIAL`: Fama–French size and book-to-market are implemented; profitability and
+  investment await standardized statement fields.
 - `DEFERRED`: minute UTD/UTR and high-frequency indicator aggregation require minute data.
 - `DEFERRED`: gross-profitability and asset-growth extensions require broader financial PIT fields.
 - `PARTIAL`: output and predictive-behavior deduplication require real materialized values.

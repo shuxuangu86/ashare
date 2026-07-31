@@ -19,6 +19,13 @@ from aquant.factors.evaluation.institutional import (
     long_short_return_series,
     newey_west_mean_t,
 )
+from aquant.factors.evaluation.multiple_testing import (
+    FamilyTestingSummary,
+    SPATestResult,
+    benjamini_hochberg,
+    family_multiple_testing_summary,
+    superior_predictive_ability_test,
+)
 from aquant.factors.evaluation.protocol import EvaluationTiming, pit_forward_return_labels
 
 __all__ = [
@@ -27,18 +34,23 @@ __all__ = [
     "FactorApprovalStatus",
     "FactorCard",
     "FactorEvaluation",
+    "FamilyTestingSummary",
     "GateDecision",
     "InstitutionalEvaluation",
     "ProductionEvidence",
     "ProductionGateConfig",
+    "SPATestResult",
     "admit_factor_candidates",
     "basic_style_exposures",
+    "benjamini_hochberg",
     "evaluate_institutional",
     "evaluate_production_gate",
+    "family_multiple_testing_summary",
     "historical_market_regimes",
     "long_short_return_series",
     "newey_west_mean_t",
     "pit_forward_return_labels",
+    "superior_predictive_ability_test",
     "verify_leakage_attestation",
     "write_leakage_attestation",
 ]

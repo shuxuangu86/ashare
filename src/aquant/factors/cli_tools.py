@@ -14,6 +14,7 @@ from aquant.domain.data_release import DataReleaseId
 from aquant.factors.aggregation import ModelKind, walk_forward_predict
 from aquant.factors.atomic import (
     AtomicFactor,
+    academic_extension_library,
     alpha101_original_library,
     baseline_factor_library,
     gtja191_original_library,
@@ -61,11 +62,12 @@ def selected_factors(value: str) -> tuple[AtomicFactor, ...]:
     baseline = baseline_factor_library()
     second_wave = second_wave_candidate_library()
     technical = technical_factor_library_v2()
+    academic = academic_extension_library()
     alpha101 = alpha101_original_library()
     alpha191 = gtja191_original_library()
     legacy = (*baseline, *second_wave)
     published = (*alpha101, *alpha191)
-    library = (*legacy, *technical, *published)
+    library = (*legacy, *technical, *published, *academic)
     if value == "baseline_v1":
         return baseline
     if value == "second_wave_v1":
@@ -80,6 +82,24 @@ def selected_factors(value: str) -> tuple[AtomicFactor, ...]:
         return alpha191
     if value == "published_formulas_v1":
         return published
+    if value == "academic_extensions_v1":
+        return academic
+    if value == "han_yang_zhou_2013_v1":
+        return tuple(
+            factor for factor in academic if factor.spec.source_id == "SRC_HAN_YANG_ZHOU_2013"
+        )
+    if value == "china_7000_rules_controlled_v1":
+        return tuple(
+            factor for factor in academic if factor.spec.source_id == "SRC_CHINA_7000_RULES"
+        )
+    if value == "technical_sentiment_2023_v1":
+        return tuple(
+            factor for factor in academic if factor.spec.source_id == "SRC_TECH_SENTIMENT_2023"
+        )
+    if value == "fama_french_2015_partial_v1":
+        return tuple(
+            factor for factor in baseline if factor.spec.source_id == "SRC_FAMA_FRENCH_2015"
+        )
     if value == "l2_v2":
         return library
     if value.startswith("technical_") and value.endswith("_v1"):

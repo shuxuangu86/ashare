@@ -29,6 +29,7 @@ from aquant.factors.operators.time_series import (
     rolling_std,
     rolling_sum,
 )
+from aquant.factors.spec import FactorRole, SourceFaithfulness, SourceType
 
 
 def _field(panel: FactorPanelInput, name: str) -> np.ndarray:  # type: ignore[type-arg]
@@ -594,16 +595,53 @@ def _microcap_risk_factors() -> tuple[AtomicFactor, ...]:
 
 
 def baseline_factor_library() -> tuple[AtomicFactor, ...]:
-    factors = (
-        *_size_factors(),
-        *_fundamental_factors(),
-        *_momentum_reversal_factors(),
-        *_volatility_factors(),
-        *_liquidity_factors(),
-        *_price_volume_factors(),
-        *_microcap_risk_factors(),
+    factors = tuple(
+        _attribute_fama_french_source(factor)
+        for factor in (
+            *_size_factors(),
+            *_fundamental_factors(),
+            *_momentum_reversal_factors(),
+            *_volatility_factors(),
+            *_liquidity_factors(),
+            *_price_volume_factors(),
+            *_microcap_risk_factors(),
+        )
     )
     keys = [(factor.spec.factor_id, factor.spec.version) for factor in factors]
     if len(keys) != len(set(keys)):
         raise RuntimeError("baseline factor library contains duplicate versions")
     return factors
+
+
+def _attribute_fama_french_source(factor: AtomicFactor) -> AtomicFactor:
+    source_metadata = {
+        "log_total_market_cap": (
+            "SIZE",
+            FactorRole.RISK_FACTOR,
+            SourceFaithfulness.NORMALIZED_EQUIVALENT,
+            "Company-level size characteristic; portfolio sorting is deferred to L3/L4.",
+        ),
+        "book_to_market": (
+            "B/M",
+            FactorRole.ALPHA_CANDIDATE,
+            SourceFaithfulness.A_SHARE_ADAPTED,
+            "PIT daily PB inverse; accounting profitability and investment fields remain missing.",
+        ),
+    }
+    metadata = source_metadata.get(factor.spec.factor_id)
+    if metadata is None:
+        return factor
+    formula_id, role, faithfulness, notes = metadata
+    spec = factor.spec.model_copy(
+        update={
+            "role": role,
+            "source_type": SourceType.ACADEMIC_PAPER,
+            "source_reference": "Fama and French (2015)",
+            "source_id": "SRC_FAMA_FRENCH_2015",
+            "source_section": "Factor definitions",
+            "source_formula_id": formula_id,
+            "source_faithfulness": faithfulness,
+            "implementation_notes": notes,
+        }
+    )
+    return AtomicFactor(spec, factor.calculator)

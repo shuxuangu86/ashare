@@ -20,6 +20,19 @@ formulas. GTJA Alpha143 remains registered as `FORMULA_AMBIGUOUS` because the re
 formulas are both retained. OCR repairs, default-window interpretations, benchmark
 proxies, VWAP derivation, and industry approximations are never labeled `EXACT`.
 
+The academic extension coverage is:
+
+- `SRC_HAN_YANG_ZHOU_2013`: 13 implemented registrations (7 components, 6 interactions).
+- `SRC_CHINA_7000_RULES`: 687 controlled variants across all five published rule
+  families; the original 7,846-trial count and controlled search-space hash are retained.
+- `SRC_TECH_SENTIMENT_2023`: 7 L2 aggregates from 10 pre-declared daily signals.
+- `SRC_FAMA_FRENCH_2015`: 2 implemented company characteristics (size and
+  book-to-market); profitability and investment are `DATA_DEPENDENCY_MISSING`.
+
+China-rule registrations are `DERIVED_VARIANT` because the source tests index timing
+rules while AQuant materializes continuous stock-level L2 values. Technical sentiment is
+`A_SHARE_ADAPTED` and deliberately excludes ex-post performance weighting.
+
 ## Data semantics
 
 Daily close-derived factors have `availability_lag=1`: a value computed after the close

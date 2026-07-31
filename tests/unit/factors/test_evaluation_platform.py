@@ -3,7 +3,11 @@ import pytest
 
 from aquant.factors.evaluation.cost import net_returns
 from aquant.factors.evaluation.ic import forward_return_labels, information_coefficient
-from aquant.factors.evaluation.multiple_testing import benjamini_hochberg
+from aquant.factors.evaluation.multiple_testing import (
+    benjamini_hochberg,
+    family_multiple_testing_summary,
+    superior_predictive_ability_test,
+)
 from aquant.factors.evaluation.quality import evaluate_quality
 from aquant.factors.evaluation.walk_forward import fixed_time_split, walk_forward_splits
 
@@ -78,3 +82,34 @@ def test_benjamini_hochberg_adjustment_and_costs() -> None:
     )
     with pytest.raises(ValueError):
         benjamini_hochberg((1.1,))
+
+
+def test_family_multiple_testing_and_spa_are_deterministic() -> None:
+    summaries = family_multiple_testing_summary(
+        {"trend": (0.001, 0.02, 0.2), "value": (0.4,)},
+        alpha=0.05,
+    )
+    assert tuple(summary.family for summary in summaries) == ("trend", "value")
+    assert summaries[0].trial_count == 3
+    assert summaries[0].rejected_count == 2
+
+    generator = np.random.default_rng(7)
+    differentials = generator.normal(0, 0.01, size=(240, 4))
+    differentials[:, 0] += 0.004
+    first = superior_predictive_ability_test(
+        differentials,
+        bootstrap_samples=200,
+        seed=17,
+    )
+    second = superior_predictive_ability_test(
+        differentials,
+        bootstrap_samples=200,
+        seed=17,
+    )
+    assert first == second
+    assert first.statistic > 0
+    assert 0 <= first.lower_p_value <= first.p_value <= first.upper_p_value <= 1
+    assert (first.observation_count, first.trial_count) == (240, 4)
+
+    with pytest.raises(ValueError):
+        superior_predictive_ability_test(np.ones((19, 2)))

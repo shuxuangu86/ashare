@@ -69,7 +69,7 @@ sources:
     factor_families: [interaction, trend]
     required_data: [bars_1d, daily_basic_pit]
     implementation_status: IMPLEMENTED
-    notes: Interactions retain explicit parent components.
+    notes: 7 components and 6 two-way interactions; market residuals use an explicit A-share proxy.
   - source_id: SRC_CHINA_7000_RULES
     title: Testing the Performance of Technical Trading Rules in the Chinese Market
     authors_or_institution: Shan Wang; Zhi-Qiang Jiang; Sai-Ping Li; Wei-Xing Zhou
@@ -80,7 +80,7 @@ sources:
     factor_families: [technical_rule]
     required_data: [bars_1d]
     implementation_status: IMPLEMENTED
-    notes: Controlled templates only; search-space hash and FDR are mandatory.
+    notes: 687 controlled variants across five source families; full 7,846-trial space remains declared, not materialized.
   - source_id: SRC_TECH_SENTIMENT_2023
     title: Technical Analysis as a Sentiment Barometer and the Cross-Section of Stock Returns
     authors_or_institution: Wenjie Ding; Khelifa Mazouz; Owain ap Gwilym; Qingwei Wang
@@ -91,7 +91,7 @@ sources:
     factor_families: [technical_sentiment]
     required_data: [derived_technical_signals]
     implementation_status: IMPLEMENTED
-    notes: L2 inputs and RESEARCH_ONLY L3 aggregation.
+    notes: 7 L2 breadth, agreement, dispersion, and net-sentiment inputs from 10 pre-declared rules.
   - source_id: SRC_DONGWU_TECH_SERIES
     title: 技术分析拥抱选股因子系列
     authors_or_institution: 东吴证券
@@ -124,7 +124,7 @@ sources:
     factor_families: [size, value, profitability, investment]
     required_data: [financials_pit, daily_basic_pit]
     implementation_status: DATA_DEPENDENCY_MISSING
-    notes: Company-level PIT inputs require broader standardized financial fields.
+    notes: Size and PIT PB-derived book-to-market implemented; profitability and investment remain DATA_DEPENDENCY_MISSING.
   - source_id: SRC_JEGADEESH_TITMAN_1993
     title: Returns to Buying Winners and Selling Losers
     authors_or_institution: Narasimhan Jegadeesh; Sheridan Titman
