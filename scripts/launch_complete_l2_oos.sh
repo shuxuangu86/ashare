@@ -23,7 +23,7 @@ common_args=(
   --end-date 20260717
   --horizons 1,5,10,20,40
   --cost-bps 10
-  --batch-size 2
+  --batch-size 4
   --oos-fraction 0.2
   --code-version "${code_version}"
   --reload-per-batch
