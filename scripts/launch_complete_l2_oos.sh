@@ -9,6 +9,7 @@ log_file="artifacts/logs/l2-complete-oos.log"
 status_file="artifacts/logs/l2-complete-oos.status"
 
 if [[ "${1:-}" != "--worker" && "${1:-}" != "--worker-from-divergence" \
+  && "${1:-}" != "--worker-from-size" \
   && -f "${pid_file}" ]] \
   && kill -0 "$(cat "${pid_file}")" 2>/dev/null; then
   echo "complete L2 OOS evaluation already running with pid $(cat "${pid_file}")"
@@ -35,13 +36,14 @@ run_evaluation() {
   local factor_set="$1"
   local report_name="$2"
   local neutralization="$3"
+  local convergence_root="${AQUANT_CONVERGENCE_ROOT:-artifacts/convergence}"
   shift 3
   printf '%s\tRUNNING\t%s\n' "$(date --iso-8601=seconds)" "${report_name}" >"${status_file}"
   /usr/bin/time -v .venv/bin/python scripts/evaluate_factors.py \
     "${common_args[@]}" \
     --factor-set "${factor_set}" \
     --report-dir "reports/${report_name}" \
-    --convergence-cache "artifacts/convergence/${report_name}" \
+    --convergence-cache "${convergence_root}/${report_name}" \
     --neutralization "${neutralization}" \
     "$@"
   printf '%s\tPASS\t%s\n' "$(date --iso-8601=seconds)" "${report_name}" >"${status_file}"
@@ -54,8 +56,10 @@ run_worker() {
   run_evaluation technical_classic_state_v1 l2-v2-technical-state-5y-v1 raw
   run_evaluation technical_classic_divergence_v1 l2-v2-technical-divergence-5y-v1 raw
   run_evaluation china_7000_rules_controlled_v1 l2-v2-china-rules-controlled-5y-v2 raw
-  run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
-  run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
+  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
+    run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
+  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
+    run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
     --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
     --industry-quality-report \
     artifacts/data_quality/industry_pit/sw_industry_pit_20260717_v3/20210719_20260717/quality.json
@@ -65,8 +69,22 @@ run_worker() {
 run_worker_from_divergence() {
   run_evaluation technical_classic_divergence_v1 l2-v2-technical-divergence-5y-v1 raw
   run_evaluation china_7000_rules_controlled_v1 l2-v2-china-rules-controlled-5y-v2 raw
-  run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
-  run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
+  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
+    run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
+  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
+    run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
+    --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
+    --industry-quality-report \
+    artifacts/data_quality/industry_pit/sw_industry_pit_20260717_v3/20210719_20260717/quality.json
+  printf '%s\tCOMPLETE\tall\n' "$(date --iso-8601=seconds)" >"${status_file}"
+}
+
+run_worker_from_size() {
+  mkdir -p /mnt/d/AQuantEvaluation/convergence
+  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
+    run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
+  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
+    run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
     --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
     --industry-quality-report \
     artifacts/data_quality/industry_pit/sw_industry_pit_20260717_v3/20210719_20260717/quality.json
@@ -85,8 +103,21 @@ if [[ "${1:-}" == "--worker-from-divergence" ]]; then
   exit 0
 fi
 
+if [[ "${1:-}" == "--worker-from-size" ]]; then
+  trap 'printf "%s\tFAILED\tline=%s\n" "$(date --iso-8601=seconds)" "$LINENO" >"${status_file}"' ERR
+  run_worker_from_size
+  exit 0
+fi
+
 if [[ "${1:-}" == "--from-divergence" ]]; then
   nohup bash scripts/launch_complete_l2_oos.sh --worker-from-divergence >"${log_file}" 2>&1 &
+  echo "$!" >"${pid_file}"
+  echo "started pid $(cat "${pid_file}") log ${log_file} code ${code_version}"
+  exit 0
+fi
+
+if [[ "${1:-}" == "--from-size" ]]; then
+  nohup bash scripts/launch_complete_l2_oos.sh --worker-from-size >"${log_file}" 2>&1 &
   echo "$!" >"${pid_file}"
   echo "started pid $(cat "${pid_file}") log ${log_file} code ${code_version}"
   exit 0
