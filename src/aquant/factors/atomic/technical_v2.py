@@ -217,6 +217,9 @@ def _build_factor(
         }
         else FactorRole.ALPHA_CANDIDATE
     )
+    input_fields = set(variant.required_columns)
+    if transformation is TechnicalTransformation.DIVERGENCE_WITH_VOLUME:
+        input_fields.add("volume")
     spec = FactorSpec(
         factor_id=factor_id,
         name=f"{variant.indicator} {variant.token} {transformation.value}",
@@ -233,7 +236,7 @@ def _build_factor(
         ),
         expected_direction=0,
         implementation=f"aquant.factors.atomic.technical_v2:{factor_id}",
-        input_fields=variant.required_columns,
+        input_fields=tuple(sorted(input_fields)),
         required_datasets=("bars_1d",),
         parent_factor_ids=(),
         variant_dimension="technical_transformation",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 cd /home/gsx1339/aquant
 mkdir -p artifacts/convergence artifacts/logs reports
@@ -61,9 +61,33 @@ run_worker() {
   printf '%s\tCOMPLETE\tall\n' "$(date --iso-8601=seconds)" >"${status_file}"
 }
 
+run_worker_from_divergence() {
+  run_evaluation technical_classic_divergence_v1 l2-v2-technical-divergence-5y-v1 raw
+  run_evaluation china_7000_rules_controlled_v1 l2-v2-china-rules-controlled-5y-v2 raw
+  run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
+  run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
+    --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
+    --industry-quality-report \
+    artifacts/data_quality/industry_pit/sw_industry_pit_20260717_v3/20210719_20260717/quality.json
+  printf '%s\tCOMPLETE\tall\n' "$(date --iso-8601=seconds)" >"${status_file}"
+}
+
 if [[ "${1:-}" == "--worker" ]]; then
   trap 'printf "%s\tFAILED\tline=%s\n" "$(date --iso-8601=seconds)" "$LINENO" >"${status_file}"' ERR
   run_worker
+  exit 0
+fi
+
+if [[ "${1:-}" == "--worker-from-divergence" ]]; then
+  trap 'printf "%s\tFAILED\tline=%s\n" "$(date --iso-8601=seconds)" "$LINENO" >"${status_file}"' ERR
+  run_worker_from_divergence
+  exit 0
+fi
+
+if [[ "${1:-}" == "--from-divergence" ]]; then
+  nohup bash scripts/launch_complete_l2_oos.sh --worker-from-divergence >"${log_file}" 2>&1 &
+  echo "$!" >"${pid_file}"
+  echo "started pid $(cat "${pid_file}") log ${log_file} code ${code_version}"
   exit 0
 fi
 

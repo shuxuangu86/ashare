@@ -32,6 +32,13 @@ def test_technical_v2_is_controlled_unique_and_traceable() -> None:
     assert all(factor.spec.availability_lag == 1 for factor in factors)
     assert all(factor.spec.source_id.startswith("SRC_") for factor in factors)
     assert all(factor.spec.minimum_periods for factor in factors)
+    volume_divergences = [
+        factor
+        for factor in factors
+        if factor.spec.parameters["transformation"] == "divergence_with_volume"
+    ]
+    assert volume_divergences
+    assert all("volume" in factor.spec.input_fields for factor in volume_divergences)
 
 
 def test_technical_v2_smoke_is_deterministic_and_has_no_future_dependency() -> None:
