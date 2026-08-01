@@ -17,6 +17,10 @@ if [[ "${1:-}" != "--worker" && "${1:-}" != "--worker-from-divergence" \
 fi
 
 code_version="$(git rev-parse HEAD)"
+batch_size=4
+if [[ "${1:-}" == "--worker-from-size" ]]; then
+  batch_size=2
+fi
 common_args=(
   --release-dir data/standard/history-release=cn_equity_history_20260717_001
   --data-release-id cn_equity_20260717_001
@@ -25,7 +29,7 @@ common_args=(
   --end-date 20260717
   --horizons 1,5,10,20,40
   --cost-bps 10
-  --batch-size 4
+  --batch-size "${batch_size}"
   --oos-fraction 0.2
   --code-version "${code_version}"
   --reload-per-batch
