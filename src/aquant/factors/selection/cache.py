@@ -71,7 +71,8 @@ class ConvergenceCache:
             dtype=np.float32,
             shape=(len(factor_ids), *expected),
         )
-        values[:] = np.nan
+        # Unwritten rows are excluded by factor_hashes, so eagerly filling a large
+        # cache with NaNs only forces a full physical write before evaluation starts.
         values.flush()
         close_values = np.lib.format.open_memmap(  # type: ignore[no-untyped-call]
             root / "close.npy",
