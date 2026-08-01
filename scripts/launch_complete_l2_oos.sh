@@ -8,7 +8,8 @@ pid_file="artifacts/logs/l2-complete-oos.pid"
 log_file="artifacts/logs/l2-complete-oos.log"
 status_file="artifacts/logs/l2-complete-oos.status"
 
-if [[ "${1:-}" != "--worker" && -f "${pid_file}" ]] \
+if [[ "${1:-}" != "--worker" && "${1:-}" != "--worker-from-divergence" \
+  && -f "${pid_file}" ]] \
   && kill -0 "$(cat "${pid_file}")" 2>/dev/null; then
   echo "complete L2 OOS evaluation already running with pid $(cat "${pid_file}")"
   exit 0
