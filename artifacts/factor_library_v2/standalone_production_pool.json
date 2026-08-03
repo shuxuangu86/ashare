@@ -1,10 +1,9 @@
 {
-  "content_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "content_hash": "8215a30eb81e8d673c01abeaec8395baeb4a878361164bfccda25b6a2ecf8b60",
   "factor_ids": [],
   "reason_codes": [
-    "AWAITING_OOS_EVALUATION"
+    "STRICT_PRODUCTION_GATE_NOT_RUN_IN_FEATURE_SELECTION_STAGE"
   ],
-  "schema_version": "aquant.factor-pool.v2",
-  "status": "NOT_EVALUATED",
+  "status": "NOT_RUN",
   "tier": "STANDALONE_PRODUCTION_ALPHA"
 }

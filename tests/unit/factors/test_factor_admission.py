@@ -59,6 +59,7 @@ def test_admission_uses_directional_oos_evidence_and_does_not_force_core(
                         "annual_rank_ic": [[2025, direction * 0.02], [2026, direction * 0.03]],
                         "monotonicity": direction * 0.8,
                         "turnover": 0.3,
+                        "long_short_return": direction * 0.0012,
                         "net_long_short_return": direction * 0.001,
                         "regime_rank_ic": [
                             ["BULL", direction * 0.02],
@@ -125,6 +126,41 @@ def test_admission_uses_directional_oos_evidence_and_does_not_force_core(
     assert payload["factors"][1]["decision"]["rejections"] == ("MISSING_EXPECTED_DIRECTION",)
     assert (tmp_path / "admission_summary.md").is_file()
     assert (tmp_path / "factor_level_decisions.parquet").is_file()
+
+
+def test_negative_direction_does_not_reverse_transaction_cost() -> None:
+    from aquant.factors.evaluation.admission import _production_evidence
+
+    report = {
+        "factor": {"expected_direction": -1, "complexity_score": 1.0},
+        "rank_ic": {"by_date": [0.1, -0.1]},
+        "extra_metrics": {
+            "oos_horizons": {
+                "5": {
+                    "rank_ic_mean": -0.03,
+                    "rank_icir": -0.2,
+                    "ic_positive_ratio": 0.4,
+                    "annual_rank_ic": [[2025, -0.03]],
+                    "monotonicity": -0.8,
+                    "turnover": 0.3,
+                    "long_short_return": -0.002,
+                    "net_long_short_return": -0.0023,
+                    "regime_rank_ic": [],
+                    "style_exposures": [],
+                }
+            }
+        },
+        "quality": {"missing_rate": 0.1},
+    }
+    evidence = _production_evidence(
+        report,
+        {"conditional_rank_ic": -0.01},
+        np.asarray([[1.0]]),
+        0,
+        history_years=5.0,
+        horizon=5,
+    )
+    assert evidence.directional_net_return == pytest.approx(0.0017)
 
 
 def test_leakage_attestation_rejects_tampering(tmp_path: Path) -> None:

@@ -1,10 +1,318 @@
 {
-  "content_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-  "factor_ids": [],
-  "reason_codes": [
-    "AWAITING_OOS_EVALUATION"
+  "content_hash": "a765f6028160e92726d114468fc4310c6cb82393c9bd8eb7e76bc51b8f2e6675",
+  "factors": [
+    {
+      "factor_id": "alpha101_097",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "gtja191_049",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "gtja191_050",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "gtja191_051",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "gtja191_138",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_atr_window10_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_atr_window14_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_atr_window20_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_atr_window60_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_tr_window14_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_tr_window5_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_adx_window10_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_adx_window14_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_adx_window20_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_ama_window10_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_ama_window20_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_ama_window60_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_ema_window10_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_ema_window120_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_ema_window20_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_ema_window5_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_ema_window60_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window10_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window120_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window20_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window252_compression",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window252_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window252_divergence_with_price",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window252_divergence_with_volume",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window252_expansion",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window252_ts_percentile",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window252_zscore",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window5_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_sma_window60_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_vhf_window120_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_vhf_window14_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_vhf_window28_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_vhf_window60_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_wma_window10_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_wma_window20_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_wma_window5_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_wma_window60_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window120_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window252_compression",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window252_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window252_divergence_with_price",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window252_divergence_with_volume",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window252_expansion",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window252_ts_percentile",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window252_zscore",
+      "reason_codes": [
+        "COVERAGE_TOO_LOW"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window30_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    },
+    {
+      "factor_id": "tech_hurst_window60_cross_state",
+      "reason_codes": [
+        "DEGENERATE_OUTPUT"
+      ]
+    }
   ],
-  "schema_version": "aquant.factor-pool.v2",
-  "status": "NOT_EVALUATED",
-  "tier": "REJECTED"
+  "status": "PASS"
 }

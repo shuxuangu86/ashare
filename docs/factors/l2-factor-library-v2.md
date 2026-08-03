@@ -75,9 +75,22 @@ The command also supports `--family`, `--start-date`, `--end-date`, `--dry-run`,
 `--force`. Its checkpoint binds factor hashes, source-registry hash, code version, and
 configuration. Unchanged completed builds are skipped with `--resume`.
 
-Catalog publication does not imply evaluation. Pools remain empty with
-`AWAITING_OOS_EVALUATION` until real PIT materialization, leakage checks, OOS evaluation,
-output/predictive deduplication, and family selection complete.
+The size-neutral five-year evaluation is complete for 2,569 executable factors. It
+produced 2,517 `RESEARCH_VALIDATED`, 140 `FEATURE_ELIGIBLE`, and 52 `REJECTED` factors.
+The strict standalone-production gate remains separate and was not relaxed or inferred
+from feature eligibility.
+
+Behavioral deduplication uses only the first 80% daily RankIC series inside each family;
+762 non-representative candidates are mapped to a near-duplicate representative at
+absolute correlation 0.995. The 140-member pool is selected by required family
+archetypes and Pareto diversity, with at most nine members per family. BH-FDR results
+are recorded but weak single-factor significance does not itself hard-reject an L2.
+
+The L3 integration smoke covers 19 multi-member families and five methods over three
+expanding time-ordered folds. All preprocessing and model fitting use the training
+window only. Results are `RESEARCH_ONLY`: the L2 shortlist used OOS evidence, so the
+same history is not an untouched final L3 test. A nested L3 selection run or later data
+release is required before L4 claims.
 
 ## Explicit partial/deferred scope
 
@@ -88,5 +101,7 @@ output/predictive deduplication, and family selection complete.
   investment await standardized statement fields.
 - `DEFERRED`: minute UTD/UTR and high-frequency indicator aggregation require minute data.
 - `DEFERRED`: gross-profitability and asset-growth extensions require broader financial PIT fields.
-- `PARTIAL`: output and predictive-behavior deduplication require real materialized values.
-- `PARTIAL`: FEATURE_ELIGIBLE and L3 family smoke artifacts await the OOS evaluation run.
+- `COMPLETE`: size-neutral output/predictive-behavior deduplication and pool publication.
+- `COMPLETE`: size-neutral L3 family integration smoke; result remains `RESEARCH_ONLY`.
+- `RUNNING`: industry/style proxy robustness evaluation, 943/2,569 at last audit. This
+  proxy is not true industry neutralization and does not block the size-neutral pool.

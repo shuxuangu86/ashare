@@ -278,7 +278,10 @@ def _production_evidence(
         ),
         monotonicity=direction * float(metrics["monotonicity"]),
         turnover=float(metrics["turnover"]),
-        directional_net_return=direction * float(metrics["net_long_short_return"]),
+        directional_net_return=(
+            direction * float(metrics["long_short_return"])
+            - (float(metrics["long_short_return"]) - float(metrics["net_long_short_return"]))
+        ),
         maximum_peer_correlation=(float(np.max(peer_values)) if len(peer_values) else 0.0),
         conditional_rank_ic=direction * float(convergence_factor["conditional_rank_ic"]),
         complexity=float(report["factor"]["complexity_score"]),
