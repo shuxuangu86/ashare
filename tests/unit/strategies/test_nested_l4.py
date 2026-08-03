@@ -1,7 +1,12 @@
 from datetime import date, timedelta
 
 import numpy as np
-from scripts.run_nested_l4_backtest import _daily_curve_csv, _fold_performance
+import pytest
+from scripts.run_nested_l4_backtest import (
+    _BASE_COST_ASSUMPTIONS,
+    _daily_curve_csv,
+    _fold_performance,
+)
 
 from aquant.strategies.microcap.experiments import RebalanceFrequency
 from aquant.strategies.nested_l4 import select_l4_configuration
@@ -90,3 +95,12 @@ def test_outer_fold_performance_is_reported_separately() -> None:
     assert len(rows) == 5
     assert rows[1].startswith("2021-01-01,1,")
     assert rows[-1].startswith("2021-01-04,2,")
+
+
+def test_nested_backtest_discloses_executable_cost_assumptions() -> None:
+    assert _BASE_COST_ASSUMPTIONS["execution_time"] == "T_PLUS_1_OPEN"
+    assert _BASE_COST_ASSUMPTIONS["slippage_bps_each_fill"] == 5
+    assert _BASE_COST_ASSUMPTIONS["minimum_commission_cny"] == 5
+    assert _BASE_COST_ASSUMPTIONS[
+        "maximum_prior_20d_average_volume_participation"
+    ] == pytest.approx(0.005)

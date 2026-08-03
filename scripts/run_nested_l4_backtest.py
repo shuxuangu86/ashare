@@ -27,6 +27,23 @@ from aquant.strategies import (
 )
 from aquant.strategies.all_a_equal_proxy import build_all_a_equal_weight_proxy
 
+_BASE_COST_ASSUMPTIONS: dict[str, Any] = {
+    "signal_time": "T_CLOSE",
+    "execution_time": "T_PLUS_1_OPEN",
+    "slippage_bps_each_fill": 5,
+    "commission_rate": 0.0003,
+    "minimum_commission_cny": 5,
+    "sell_stamp_duty_rate_before_2023_08_28": 0.001,
+    "sell_stamp_duty_rate_from_2023_08_28": 0.0005,
+    "transfer_fee_rate_before_2022_04_29": 0.00002,
+    "transfer_fee_rate_from_2022_04_29": 0.00001,
+    "lot_size": 100,
+    "maximum_prior_20d_average_volume_participation": 0.005,
+    "security_status_required": True,
+    "unfilled_order_policy": "CANCEL_AFTER_OPEN",
+    "tradability_rules": "SUSPENSION_AND_PRICE_LIMIT_AWARE",
+}
+
 
 def main() -> None:
     args = _arguments()
@@ -139,6 +156,7 @@ def main() -> None:
         "history_release_id": release_id,
         "code_version": args.code_version,
         "benchmark": proxy_metadata,
+        "execution_assumptions": dict(_BASE_COST_ASSUMPTIONS),
         "outer_test_used_for_optimization": False,
         "fold_configurations": [
             {
@@ -429,6 +447,16 @@ def _markdown(payload: dict[str, Any]) -> str:
 - Target basis: `{payload["target_audit"]["basis"]}`
 - Outer test used for optimization: `False`
 - T+1 attested: `{payload["execution"]["t_plus_one_attested"]}`
+
+## Execution Assumptions
+
+- Signal / fill: T close / T+1 open
+- Slippage: 5 bps per fill
+- Commission: 3 bps, minimum CNY 5 per fill
+- Sell stamp duty: 10 bps before 2023-08-28; 5 bps thereafter
+- Transfer fee: 0.2 bps before 2022-04-29; 0.1 bps thereafter
+- Lot / liquidity cap: 100 shares; 0.5% of prior 20-day average volume
+- Suspensions and price-limit blocks are enforced; unfilled orders cancel after the open
 
 ## Sequential Outer-OOS Folds
 
