@@ -105,6 +105,13 @@ def main() -> None:
         strategy_returns=strategy_returns,
         benchmark_returns=proxy_returns,
     )
+    daily_curve_csv = _daily_curve_csv(
+        folds=l3["folds"],
+        aligned_dates=aligned_dates,
+        strategy_returns=strategy_returns,
+        benchmark_returns=proxy_returns,
+    )
+    fills_csv = _fills_csv(result.fills)
     target_met = bool(
         performance["annual_excess_return"] >= 0.15
         or (performance["annual_excess_return"] >= 0.10 and performance["excess_sharpe"] > 0.8)
@@ -133,6 +140,16 @@ def main() -> None:
         ],
         "fold_performance": fold_performance,
         "performance": performance,
+        "artifacts": {
+            "daily_outer_oos_curve": {
+                "file": "nested_l4_daily_oos.csv",
+                "sha256": _text_hash(daily_curve_csv),
+            },
+            "fills": {
+                "file": "nested_l4_fills.csv",
+                "sha256": _text_hash(fills_csv),
+            },
+        },
         "execution": {
             "orders": len(result.orders),
             "fills": len(result.fills),
@@ -150,6 +167,8 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     _write(args.output_dir / "nested_l4_backtest.json", json.dumps(payload, indent=2) + "\n")
     _write(args.output_dir / "nested_l4_backtest.md", _markdown(payload))
+    _write(args.output_dir / "nested_l4_daily_oos.csv", daily_curve_csv)
+    _write(args.output_dir / "nested_l4_fills.csv", fills_csv)
     _write(
         args.output_dir / "benchmark_proxy.csv",
         "trade_date,return_rate,constituent_count\n"
@@ -291,6 +310,57 @@ def _fold_performance(
     return result
 
 
+def _daily_curve_csv(
+    *,
+    folds: list[dict[str, Any]],
+    aligned_dates: tuple[date, ...],
+    strategy_returns: dict[date, float],
+    benchmark_returns: dict[date, float],
+) -> str:
+    ranges = tuple(
+        (
+            int(fold["fold"]),
+            date.fromisoformat(fold["test_start"]),
+            date.fromisoformat(fold["test_end"]),
+        )
+        for fold in folds
+    )
+    strategy_net_value = 1.0
+    benchmark_net_value = 1.0
+    rows = [
+        "trade_date,outer_fold,strategy_return,benchmark_return,active_return,"
+        "strategy_net_value,benchmark_net_value,relative_net_value\n"
+    ]
+    for trade_date in aligned_dates:
+        fold = next(
+            (number for number, start, end in ranges if start <= trade_date <= end),
+            None,
+        )
+        if fold is None:
+            raise ValueError(f"date outside sequential outer folds: {trade_date}")
+        strategy_return = strategy_returns[trade_date]
+        benchmark_return = benchmark_returns[trade_date]
+        strategy_net_value *= 1 + strategy_return
+        benchmark_net_value *= 1 + benchmark_return
+        relative_net_value = strategy_net_value / benchmark_net_value
+        rows.append(
+            f"{trade_date.isoformat()},{fold},{strategy_return:.12g},"
+            f"{benchmark_return:.12g},{strategy_return - benchmark_return:.12g},"
+            f"{strategy_net_value:.12g},{benchmark_net_value:.12g},"
+            f"{relative_net_value:.12g}\n"
+        )
+    return "".join(rows)
+
+
+def _fills_csv(fills: tuple[Any, ...]) -> str:
+    return "fill_id,order_id,occurred_at,symbol,side,quantity,price,fee,notional\n" + "".join(
+        f"{fill.fill_id},{fill.order_id},{fill.occurred_at.isoformat()},"
+        f"{fill.symbol.canonical},{fill.side.value},{fill.quantity},"
+        f"{fill.price},{fill.fee},{fill.notional}\n"
+        for fill in fills
+    )
+
+
 def _annualized(returns: np.ndarray[Any, Any]) -> float:
     total = float(np.prod(1 + returns))
     return total ** (252 / len(returns)) - 1 if total > 0 else -1.0
@@ -333,6 +403,10 @@ def _hash(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()
     ).hexdigest()
+
+
+def _text_hash(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
 
 
 def _file_hash(path: Path) -> str:

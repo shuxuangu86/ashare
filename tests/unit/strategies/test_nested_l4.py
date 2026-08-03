@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 import numpy as np
-from scripts.run_nested_l4_backtest import _fold_performance
+from scripts.run_nested_l4_backtest import _daily_curve_csv, _fold_performance
 
 from aquant.strategies.microcap.experiments import RebalanceFrequency
 from aquant.strategies.nested_l4 import select_l4_configuration
@@ -73,3 +73,17 @@ def test_outer_fold_performance_is_reported_separately() -> None:
     assert [fold["sessions"] for fold in result] == [2, 2]
     assert result[0]["annual_excess_return"] > 0
     assert result[1]["annual_excess_return"] < 0
+
+    curve = _daily_curve_csv(
+        folds=[
+            {"fold": 1, "test_start": "2021-01-01", "test_end": "2021-01-02"},
+            {"fold": 2, "test_start": "2021-01-03", "test_end": "2021-01-04"},
+        ],
+        aligned_dates=dates,
+        strategy_returns=dict(zip(dates, (0.01, 0.01, 0.00, 0.00), strict=True)),
+        benchmark_returns=dict(zip(dates, (0.00, 0.00, 0.01, 0.01), strict=True)),
+    )
+    rows = curve.splitlines()
+    assert len(rows) == 5
+    assert rows[1].startswith("2021-01-01,1,")
+    assert rows[-1].startswith("2021-01-04,2,")
