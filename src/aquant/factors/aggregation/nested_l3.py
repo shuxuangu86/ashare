@@ -6,6 +6,7 @@ import os
 import tempfile
 from collections import Counter, defaultdict
 from datetime import date
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -186,18 +187,28 @@ def _train_fold(
             normalized, labels, inner_train, maximum_rows=maximum_training_rows
         )
         evidence = _historical_evidence(normalized, labels, inner_train)
-        validation_scores: dict[ModelKind, float] = {}
+        validation_scores: dict[ModelKind, float | None] = {}
         for method in methods:
             model = _fit(method, train_x, train_y, evidence)
             predictions = _predict_dates(model, normalized, inner_validation)
-            validation_scores[method] = _daily_rank_ic(predictions, labels[inner_validation])
-        selected = max(
-            methods,
-            key=lambda method: (
-                validation_scores[method] - complexity_penalty * _METHOD_COMPLEXITY[method],
-                -_METHOD_COMPLEXITY[method],
-            ),
+            validation_scores[method] = _finite_or_none(
+                _daily_rank_ic(predictions, labels[inner_validation])
+            )
+        valid_methods = tuple(method for method in methods if validation_scores[method] is not None)
+
+        selected = (
+            max(
+                valid_methods,
+                key=partial(
+                    _method_selection_key,
+                    scores=validation_scores,
+                    complexity_penalty=complexity_penalty,
+                ),
+            )
+            if valid_methods
+            else min(methods, key=_METHOD_COMPLEXITY.__getitem__)
         )
+        selected_validation_score = validation_scores[selected]
         selected_inner_model = _fit(selected, train_x, train_y, evidence)
         validation_outputs.append(
             _predict_dates(selected_inner_model, normalized, inner_validation).astype(np.float32)
@@ -219,10 +230,16 @@ def _train_fold(
                 "inner_validation_rank_ic": {
                     method.value: validation_scores[method] for method in methods
                 },
-                "selection_score": validation_scores[selected]
-                - complexity_penalty * _METHOD_COMPLEXITY[selected],
-                "outer_rank_ic": _daily_rank_ic(
-                    outer_predictions.astype(np.float64), labels[test_positions]
+                "selection_score": (
+                    selected_validation_score - complexity_penalty * _METHOD_COMPLEXITY[selected]
+                    if selected_validation_score is not None
+                    else None
+                ),
+                "inner_validation_status": (
+                    "AVAILABLE" if valid_methods else "ALL_METHODS_UNAVAILABLE"
+                ),
+                "outer_rank_ic": _finite_or_none(
+                    _daily_rank_ic(outer_predictions.astype(np.float64), labels[test_positions])
                 ),
                 "outer_used_for_selection": False,
             }
@@ -233,16 +250,11 @@ def _train_fold(
     cross_family = np.asarray(
         [cs_zscore(output.astype(np.float64)).astype(np.float32) for output in family_outputs]
     )
-    with np.errstate(invalid="ignore"):
-        composite = np.nanmean(cross_family, axis=0)
-    all_missing = np.all(~np.isfinite(cross_family), axis=0)
-    composite[all_missing] = np.nan
+    composite = _mean_available(cross_family)
     validation_cross_family = np.asarray(
         [cs_zscore(output.astype(np.float64)) for output in validation_outputs]
     )
-    with np.errstate(invalid="ignore"):
-        validation_composite = np.nanmean(validation_cross_family, axis=0)
-    validation_composite[np.all(~np.isfinite(validation_cross_family), axis=0)] = np.nan
+    validation_composite = _mean_available(validation_cross_family)
     l4_scores = np.full(close.shape, np.nan)
     l4_scores[inner_validation] = validation_composite
     l4_selection = select_l4_configuration(
@@ -264,8 +276,8 @@ def _train_fold(
         "family_count": len(family_results),
         "families": family_results,
         "l4_selection": l4_selection,
-        "outer_composite_rank_ic": _daily_rank_ic(
-            composite.astype(np.float64), labels[test_positions]
+        "outer_composite_rank_ic": _finite_or_none(
+            _daily_rank_ic(composite.astype(np.float64), labels[test_positions])
         ),
         "scores": composite,
     }
@@ -337,6 +349,32 @@ def _predict_dates(
 
 def _daily_rank_ic(predictions: FloatArray, labels: FloatArray) -> float:
     return information_coefficient(predictions, labels, rank=True).mean
+
+
+def _finite_or_none(value: float) -> float | None:
+    return float(value) if np.isfinite(value) else None
+
+
+def _mean_available(values: FloatArray) -> FloatArray:
+    finite = np.isfinite(values)
+    counts = np.sum(finite, axis=0)
+    result = np.full(counts.shape, np.nan, dtype=np.float64)
+    np.divide(np.nansum(values, axis=0), counts, out=result, where=counts > 0)
+    return result
+
+
+def _method_selection_key(
+    method: ModelKind,
+    scores: dict[ModelKind, float | None],
+    complexity_penalty: float,
+) -> tuple[float, int]:
+    score = scores[method]
+    if score is None:
+        return (float("-inf"), -_METHOD_COMPLEXITY[method])
+    return (
+        score - complexity_penalty * _METHOD_COMPLEXITY[method],
+        -_METHOD_COMPLEXITY[method],
+    )
 
 
 def _pit_labels(close: FloatArray, horizon: int) -> FloatArray:

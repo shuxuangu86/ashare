@@ -86,6 +86,35 @@ def test_nested_l3_rejects_outer_label_overlap(tmp_path: Path) -> None:
         )
 
 
+def test_nested_l3_serializes_degenerate_validation_metrics(tmp_path: Path) -> None:
+    dates = tuple(date(2020, 1, 1) + timedelta(days=index) for index in range(90))
+    generator = np.random.default_rng(27)
+    factors = generator.normal(size=(2, 90, 24))
+    factors[:, 27:47] = np.nan
+    close = np.full((90, 24), 100.0)
+    for index in range(1, len(close)):
+        close[index] = close[index - 1] * (1 + generator.normal(scale=0.01, size=close.shape[1]))
+    payload = run_nested_l3(
+        factor_values=factors,
+        close=close,
+        trade_dates=dates,
+        factor_ids=("a", "b"),
+        fold_pools=_pools(dates),
+        output_scores=tmp_path / "scores.npy",
+        output_metadata=tmp_path / "metadata.json",
+        horizon=2,
+        inner_validation_dates=20,
+        inner_purge_dates=3,
+        maximum_training_rows=2_000,
+        methods=(ModelKind.EQUAL_WEIGHT,),
+    )
+
+    family = payload["folds"][0]["families"][0]
+    assert family["inner_validation_status"] == "ALL_METHODS_UNAVAILABLE"
+    assert family["selection_score"] is None
+    assert (tmp_path / "metadata.json").is_file()
+
+
 def _pools(dates: tuple[date, ...]) -> dict[str, object]:
     factor = {
         "a": {"factor_id": "a", "family": "momentum", "direction": 1},
