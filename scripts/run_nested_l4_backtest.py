@@ -158,6 +158,21 @@ def main() -> None:
         "benchmark": proxy_metadata,
         "execution_assumptions": dict(_BASE_COST_ASSUMPTIONS),
         "outer_test_used_for_optimization": False,
+        "l3_summary": {
+            "fold_pool_hash": l3["fold_pool_hash"],
+            "selected_method_counts": l3["selected_method_counts"],
+            "outer_metrics_used_for_selection": False,
+            "folds": [
+                {
+                    "fold": fold["fold"],
+                    "family_count": fold["family_count"],
+                    "inner_validation_start": fold["inner_validation_start"],
+                    "inner_validation_end": fold["inner_validation_end"],
+                    "outer_composite_rank_ic": fold["outer_composite_rank_ic"],
+                }
+                for fold in l3["folds"]
+            ],
+        },
         "fold_configurations": [
             {
                 "fold": fold["fold"],
@@ -430,6 +445,18 @@ def _markdown(payload: dict[str, Any]) -> str:
         )
         for fold in payload["fold_performance"]
     )
+    configuration_rows = "\n".join(
+        f"| {item['fold']} | {item['test_start']} | {item['test_end']} | "
+        f"{item['selected']['target_count']} | {item['selected']['frequency']} |"
+        for item in payload["fold_configurations"]
+    )
+    l3_rows = "\n".join(
+        f"| {item['fold']} | {item['family_count']} | "
+        f"{item['inner_validation_start']} | {item['inner_validation_end']} | "
+        f"{_format_optional(item['outer_composite_rank_ic'])} |"
+        for item in payload["l3_summary"]["folds"]
+    )
+    method_counts = json.dumps(payload["l3_summary"]["selected_method_counts"], sort_keys=True)
     return f"""# AQuant Nested Walk-Forward L4 Backtest
 
 - Status: `{payload["status"]}`
@@ -464,6 +491,21 @@ def _markdown(payload: dict[str, Any]) -> str:
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
 {fold_rows}
 
+## Frozen L4 Configuration by Fold
+
+| Fold | Start | End | Holdings | Rebalance |
+| --- | --- | --- | ---: | --- |
+{configuration_rows}
+
+## L3 Audit
+
+- Selected family-method counts: `{method_counts}`
+- Outer metrics used for selection: `False`
+
+| Fold | Families | Inner validation start | Inner validation end | Outer RankIC (report only) |
+| --- | ---: | --- | --- | ---: |
+{l3_rows}
+
 ## Methodological Limits
 
 - Benchmark is `PIT_ALL_A_SHARE_DAILY_EQUAL_PROXY`, not the official Wind All-A index.
@@ -482,6 +524,10 @@ def _hash(value: Any) -> str:
 
 def _text_hash(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _format_optional(value: float | None) -> str:
+    return "N/A" if value is None else f"{value:.4f}"
 
 
 def _file_hash(path: Path) -> str:
