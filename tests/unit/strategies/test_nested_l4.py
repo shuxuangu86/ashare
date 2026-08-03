@@ -40,6 +40,7 @@ def test_l4_configuration_uses_only_supplied_inner_validation() -> None:
     assert len(first["candidates"]) == 4
     assert first["trial_count"] == 4
     assert first["execution_model"].endswith("CONSERVATIVE_PROXY")
+    assert first["benchmark_model"].endswith("CLOSE_RETURN_PROXY")
 
     default_search = select_l4_configuration(
         scores=scores,

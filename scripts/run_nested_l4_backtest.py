@@ -119,6 +119,17 @@ def main() -> None:
     stable: dict[str, Any] = {
         "status": "PASS_RESEARCH_ONLY",
         "target_met": target_met,
+        "target_audit": {
+            "basis": "FIVE_SEQUENTIAL_UNTOUCHED_OUTER_OOS_FOLDS",
+            "criterion": (
+                "annual_excess_return>=0.15 OR (annual_excess_return>=0.10 AND excess_sharpe>0.8)"
+            ),
+            "met": target_met,
+            "if_not_met": (
+                "DO_NOT_RETUNE_ON_OBSERVED_OUTER_OOS; redesign only on inner history and "
+                "require new untouched forward data"
+            ),
+        },
         "initial_equity": str(initial_equity),
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
@@ -415,6 +426,7 @@ def _markdown(payload: dict[str, Any]) -> str:
 - Maximum drawdown: {performance["maximum_drawdown"]:.2%}
 - Relative maximum drawdown: {performance["relative_maximum_drawdown"]:.2%}
 - Target met: `{payload["target_met"]}`
+- Target basis: `{payload["target_audit"]["basis"]}`
 - Outer test used for optimization: `False`
 - T+1 attested: `{payload["execution"]["t_plus_one_attested"]}`
 
@@ -424,7 +436,13 @@ def _markdown(payload: dict[str, Any]) -> str:
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
 {fold_rows}
 
-Benchmark is `PIT_ALL_A_SHARE_DAILY_EQUAL_PROXY`, not the official Wind All-A index.
+## Methodological Limits
+
+- Benchmark is `PIT_ALL_A_SHARE_DAILY_EQUAL_PROXY`, not the official Wind All-A index.
+- Inner L4 selection uses an available-security equal-weight close-return proxy; the final
+  event backtest uses the PIT all-A proxy documented in the JSON metadata.
+- If the locked outer-OOS target is missed, those observations must not be used to tune
+  this version. A redesigned version requires new untouched forward evidence.
 """
 
 

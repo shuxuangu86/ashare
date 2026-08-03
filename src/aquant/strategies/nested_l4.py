@@ -74,6 +74,7 @@ def select_l4_configuration(
             "annual_excess_return>=0.15 OR (annual_excess_return>=0.10 AND excess_sharpe>0.8)"
         ),
         "execution_model": "T_CLOSE_SIGNAL_DELAYED_CLOSE_ACTIVATION_CONSERVATIVE_PROXY",
+        "benchmark_model": "AVAILABLE_SECURITY_DAILY_EQUAL_CLOSE_RETURN_PROXY",
         "selected": selected,
         "candidates": candidates,
     }
