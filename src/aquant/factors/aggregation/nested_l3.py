@@ -15,6 +15,7 @@ import numpy.typing as npt
 from aquant.factors.aggregation.models import AlphaAggregator, ModelKind
 from aquant.factors.evaluation.ic import information_coefficient
 from aquant.factors.operators.cross_sectional import cs_percentile, cs_zscore
+from aquant.strategies.nested_l4 import select_l4_configuration
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -80,6 +81,7 @@ def run_nested_l3(
         for fold in fold_pools["folds"]:
             result = _train_fold(
                 values=values,
+                close=prices,
                 labels=labels,
                 trade_dates=trade_dates,
                 factor_index=factor_index,
@@ -140,6 +142,7 @@ def run_nested_l3(
 def _train_fold(
     *,
     values: npt.NDArray[np.generic],
+    close: FloatArray,
     labels: FloatArray,
     trade_dates: tuple[date, ...],
     factor_index: dict[str, int],
@@ -168,6 +171,7 @@ def _train_fold(
             raise ValueError(f"fold factor is missing from materialized cache: {factor_id}")
         by_family[str(item["family"])].append(item)
     family_outputs: list[npt.NDArray[np.float32]] = []
+    validation_outputs: list[npt.NDArray[np.float32]] = []
     family_results: list[dict[str, Any]] = []
     for family, members in sorted(by_family.items()):
         ids = tuple(str(item["factor_id"]) for item in members)
@@ -189,6 +193,10 @@ def _train_fold(
                 validation_scores[method] - complexity_penalty * _METHOD_COMPLEXITY[method],
                 -_METHOD_COMPLEXITY[method],
             ),
+        )
+        selected_inner_model = _fit(selected, train_x, train_y, evidence)
+        validation_outputs.append(
+            _predict_dates(selected_inner_model, normalized, inner_validation).astype(np.float32)
         )
         full_x, full_y = _model_rows(
             normalized, labels, full_train, maximum_rows=maximum_training_rows
@@ -225,6 +233,20 @@ def _train_fold(
         composite = np.nanmean(cross_family, axis=0)
     all_missing = np.all(~np.isfinite(cross_family), axis=0)
     composite[all_missing] = np.nan
+    validation_cross_family = np.asarray(
+        [cs_zscore(output.astype(np.float64)) for output in validation_outputs]
+    )
+    with np.errstate(invalid="ignore"):
+        validation_composite = np.nanmean(validation_cross_family, axis=0)
+    validation_composite[np.all(~np.isfinite(validation_cross_family), axis=0)] = np.nan
+    l4_scores = np.full(close.shape, np.nan)
+    l4_scores[inner_validation] = validation_composite
+    l4_selection = select_l4_configuration(
+        scores=l4_scores,
+        close=close,
+        trade_dates=trade_dates,
+        validation_positions=inner_validation,
+    )
     return {
         "fold": int(fold["fold"]),
         "train_start": trade_dates[0].isoformat(),
@@ -237,6 +259,7 @@ def _train_fold(
         "outer_test_used_for_model_selection": False,
         "family_count": len(family_results),
         "families": family_results,
+        "l4_selection": l4_selection,
         "outer_composite_rank_ic": _daily_rank_ic(
             composite.astype(np.float64), labels[test_positions]
         ),
