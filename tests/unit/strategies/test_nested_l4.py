@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 import numpy as np
+from scripts.run_nested_l4_backtest import _fold_performance
 
 from aquant.strategies.microcap.experiments import RebalanceFrequency
 from aquant.strategies.nested_l4 import select_l4_configuration
@@ -37,3 +38,20 @@ def test_l4_configuration_uses_only_supplied_inner_validation() -> None:
     assert first == second
     assert first["outer_test_used_for_selection"] is False
     assert len(first["candidates"]) == 4
+
+
+def test_outer_fold_performance_is_reported_separately() -> None:
+    dates = tuple(date(2021, 1, day) for day in range(1, 5))
+    result = _fold_performance(
+        folds=[
+            {"fold": 1, "test_start": "2021-01-01", "test_end": "2021-01-02"},
+            {"fold": 2, "test_start": "2021-01-03", "test_end": "2021-01-04"},
+        ],
+        aligned_dates=dates,
+        strategy_returns=dict(zip(dates, (0.01, 0.01, 0.00, 0.00), strict=True)),
+        benchmark_returns=dict(zip(dates, (0.00, 0.00, 0.01, 0.01), strict=True)),
+    )
+
+    assert [fold["sessions"] for fold in result] == [2, 2]
+    assert result[0]["annual_excess_return"] > 0
+    assert result[1]["annual_excess_return"] < 0

@@ -99,6 +99,12 @@ def main() -> None:
     strategy = np.asarray([strategy_returns[day] for day in aligned_dates])
     benchmark = np.asarray([proxy_returns[day] for day in aligned_dates])
     performance = _performance(strategy, benchmark)
+    fold_performance = _fold_performance(
+        folds=l3["folds"],
+        aligned_dates=aligned_dates,
+        strategy_returns=strategy_returns,
+        benchmark_returns=proxy_returns,
+    )
     target_met = bool(
         performance["annual_excess_return"] >= 0.15
         or (performance["annual_excess_return"] >= 0.10 and performance["excess_sharpe"] > 0.8)
@@ -124,6 +130,7 @@ def main() -> None:
             }
             for fold in l3["folds"]
         ],
+        "fold_performance": fold_performance,
         "performance": performance,
         "execution": {
             "orders": len(result.orders),
@@ -252,6 +259,36 @@ def _performance(
     }
 
 
+def _fold_performance(
+    *,
+    folds: list[dict[str, Any]],
+    aligned_dates: tuple[date, ...],
+    strategy_returns: dict[date, float],
+    benchmark_returns: dict[date, float],
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for fold in folds:
+        start = date.fromisoformat(fold["test_start"])
+        end = date.fromisoformat(fold["test_end"])
+        dates = tuple(day for day in aligned_dates if start <= day <= end)
+        if not dates:
+            raise ValueError(f"outer fold {fold['fold']} has no aligned returns")
+        performance = _performance(
+            np.asarray([strategy_returns[day] for day in dates]),
+            np.asarray([benchmark_returns[day] for day in dates]),
+        )
+        result.append(
+            {
+                "fold": fold["fold"],
+                "test_start": fold["test_start"],
+                "test_end": fold["test_end"],
+                "sessions": len(dates),
+                **performance,
+            }
+        )
+    return result
+
+
 def _annualized(returns: np.ndarray[Any, Any]) -> float:
     total = float(np.prod(1 + returns))
     return total ** (252 / len(returns)) - 1 if total > 0 else -1.0
@@ -259,6 +296,13 @@ def _annualized(returns: np.ndarray[Any, Any]) -> float:
 
 def _markdown(payload: dict[str, Any]) -> str:
     performance = payload["performance"]
+    fold_rows = "\n".join(
+        "| {fold} | {test_start} | {test_end} | {sessions} | {annual_return:.2%} | "
+        "{annual_benchmark_return:.2%} | {annual_excess_return:.2%} | {excess_sharpe:.3f} |".format(
+            **fold
+        )
+        for fold in payload["fold_performance"]
+    )
     return f"""# AQuant Nested Walk-Forward L4 Backtest
 
 - Status: `{payload["status"]}`
@@ -271,6 +315,12 @@ def _markdown(payload: dict[str, Any]) -> str:
 - Target met: `{payload["target_met"]}`
 - Outer test used for optimization: `False`
 - T+1 attested: `{payload["execution"]["t_plus_one_attested"]}`
+
+## Sequential Outer-OOS Folds
+
+| Fold | Start | End | Sessions | Strategy p.a. | Proxy p.a. | Excess p.a. | Excess Sharpe |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+{fold_rows}
 
 Benchmark is `PIT_ALL_A_SHARE_DAILY_EQUAL_PROXY`, not the official Wind All-A index.
 """
