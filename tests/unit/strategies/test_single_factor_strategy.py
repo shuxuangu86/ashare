@@ -98,6 +98,39 @@ def test_negative_direction_selects_low_value_and_fills_t_plus_one() -> None:
     assert result.fills[0].occurred_at == _session(17).open_at
 
 
+def test_dated_configurations_can_change_target_count_without_lookahead() -> None:
+    first_date = date(2026, 7, 15)
+    second_date = date(2026, 7, 16)
+    base = {
+        "factor_id": "nested_l3",
+        "factor_version": "1.0.0",
+        "expected_direction": 1,
+        "minimum_constituents": 1,
+    }
+    configs = {
+        first_date: SingleFactorConfig(**base, target_count=1),
+        second_date: SingleFactorConfig(**base, target_count=2),
+    }
+    snapshots = {
+        first_date: _snapshot(15, (0.1, 0.2)),
+        second_date: _snapshot(16, (0.1, 0.2)),
+        date(2026, 7, 17): _snapshot(17, (0.1, 0.2)),
+    }
+    result = EventDrivenBacktest(
+        run_id="dated-config-test",
+        initial_cash=Decimal("100000"),
+    ).run(
+        (_session(15), _session(16), _session(17)),
+        SingleFactorEqualWeightStrategy(
+            snapshots=snapshots,
+            rebalance_dates=set(configs),
+            config_by_rebalance_date=configs,
+        ),
+    )
+
+    assert {fill.symbol for fill in result.fills} == set(SYMBOLS)
+
+
 def test_fractional_best_and_worst_tails_are_direction_aware() -> None:
     trade_date = date(2026, 7, 16)
     asof = datetime(2026, 7, 16, 11, 30, tzinfo=UTC)

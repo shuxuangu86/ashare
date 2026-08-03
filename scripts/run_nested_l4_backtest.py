@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import math
+import os
+from datetime import UTC, date, datetime
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from aquant.backtest import EventDrivenBacktest, UnfilledOrderPolicy, calculate_metrics
+from aquant.data.history import DuckDBMicrocapHistory
+from aquant.strategies import (
+    CostScenario,
+    RebalanceFrequency,
+    SingleFactorConfig,
+    SingleFactorEqualWeightStrategy,
+    SingleFactorObservation,
+    SingleFactorSnapshot,
+    generate_rebalance_dates,
+    matcher_for_cost_scenario,
+)
+from aquant.strategies.all_a_equal_proxy import build_all_a_equal_weight_proxy
+
+
+def main() -> None:
+    args = _arguments()
+    l3 = json.loads(args.l3_metadata.read_text())
+    expected_l3_hash = l3.pop("content_hash")
+    if expected_l3_hash != _hash(l3):
+        raise ValueError("L3 metadata content hash mismatch")
+    l3["content_hash"] = expected_l3_hash
+    if l3.get("status") != "PASS" or l3.get("outer_test_used_for_model_selection") is not False:
+        raise ValueError("L4 requires completed leakage-safe nested L3 metadata")
+    if _file_hash(args.l3_scores) != l3["score_file_hash"]:
+        raise ValueError("L3 score file hash mismatch")
+    cache = json.loads((args.cache_dir / "metadata.json").read_text())
+    if cache.get("status") != "PASS":
+        raise ValueError("nested union cache is incomplete")
+    dates = tuple(date.fromisoformat(value) for value in cache["trade_dates"])
+    codes = tuple(str(value) for value in cache["ts_codes"])
+    scores = np.load(args.l3_scores, mmap_mode="r")
+    if scores.shape != (len(dates), len(codes)):
+        raise ValueError("L3 scores do not align with nested union cache")
+    start_date = date.fromisoformat(l3["folds"][0]["test_start"])
+    end_date = date.fromisoformat(l3["folds"][-1]["test_end"])
+    date_index = {value: index for index, value in enumerate(dates)}
+    code_index = {value: index for index, value in enumerate(codes)}
+
+    with DuckDBMicrocapHistory(args.history_release) as history:
+        sessions = history.sessions(start_date, end_date)
+        session_dates = tuple(session.trade_date for session in sessions)
+        risk_snapshots = history.snapshots(session_dates)
+        release_id = history.release.manifest.release_id
+    if session_dates != tuple(value for value in dates if start_date <= value <= end_date):
+        raise ValueError("history sessions and L3 trading dates differ")
+    snapshots = _snapshots(
+        session_dates=session_dates,
+        risk_snapshots=risk_snapshots,
+        scores=scores,
+        date_index=date_index,
+        code_index=code_index,
+    )
+    rebalance_configs = _rebalance_configs(l3, session_dates)
+    initial_equity = Decimal("1000000")
+    result = EventDrivenBacktest(
+        run_id=f"nested-l3-l4-{expected_l3_hash[:12]}",
+        initial_cash=initial_equity,
+        matcher=matcher_for_cost_scenario(CostScenario.BASE_COST),
+        unfilled_order_policy=UnfilledOrderPolicy.CANCEL_AFTER_OPEN,
+    ).run(
+        sessions,
+        SingleFactorEqualWeightStrategy(
+            snapshots=snapshots,
+            rebalance_dates=set(rebalance_configs),
+            config_by_rebalance_date=rebalance_configs,
+        ),
+    )
+    metrics = calculate_metrics(result, initial_equity=initial_equity)
+    orders = {order.order_id: order for order in result.orders}
+    t_plus_one = bool(result.fills) and all(
+        fill.occurred_at.date() > orders[fill.order_id].submitted_at.date() for fill in result.fills
+    )
+    if not t_plus_one:
+        raise ValueError("nested L4 produced no fills or violated T+1 execution")
+    proxy, proxy_metadata = build_all_a_equal_weight_proxy(
+        args.history_release, start_date=start_date, end_date=end_date
+    )
+    proxy_returns = {item.trade_date: item.return_rate for item in proxy}
+    strategy_returns = _strategy_returns(result.equity_curve, initial_equity)
+    aligned_dates = tuple(
+        day for day in session_dates if day in strategy_returns and day in proxy_returns
+    )
+    strategy = np.asarray([strategy_returns[day] for day in aligned_dates])
+    benchmark = np.asarray([proxy_returns[day] for day in aligned_dates])
+    performance = _performance(strategy, benchmark)
+    target_met = bool(
+        performance["annual_excess_return"] >= 0.15
+        or (performance["annual_excess_return"] >= 0.10 and performance["excess_sharpe"] > 0.8)
+    )
+    stable: dict[str, Any] = {
+        "status": "PASS_RESEARCH_ONLY",
+        "target_met": target_met,
+        "initial_equity": str(initial_equity),
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "sessions": len(sessions),
+        "l3_content_hash": expected_l3_hash,
+        "cache_content_hash": cache["content_hash"],
+        "history_release_id": release_id,
+        "benchmark": proxy_metadata,
+        "outer_test_used_for_optimization": False,
+        "fold_configurations": [
+            {
+                "fold": fold["fold"],
+                "test_start": fold["test_start"],
+                "test_end": fold["test_end"],
+                "selected": fold["l4_selection"]["selected"],
+            }
+            for fold in l3["folds"]
+        ],
+        "performance": performance,
+        "execution": {
+            "orders": len(result.orders),
+            "fills": len(result.fills),
+            "fill_rate": str(metrics.fill_rate),
+            "gross_turnover": str(metrics.gross_turnover),
+            "total_fees": str(metrics.total_fees),
+            "maximum_drawdown": str(metrics.max_drawdown),
+            "final_equity": str(metrics.final_equity),
+            "final_state_hash": result.final_state_hash,
+            "t_plus_one_attested": t_plus_one,
+        },
+    }
+    stable["content_hash"] = _hash(stable)
+    payload = {**stable, "created_at": datetime.now(UTC).isoformat(timespec="seconds")}
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    _write(args.output_dir / "nested_l4_backtest.json", json.dumps(payload, indent=2) + "\n")
+    _write(args.output_dir / "nested_l4_backtest.md", _markdown(payload))
+    _write(
+        args.output_dir / "benchmark_proxy.csv",
+        "trade_date,return_rate,constituent_count\n"
+        + "".join(
+            f"{item.trade_date.isoformat()},{item.return_rate:.12g},{item.constituent_count}\n"
+            for item in proxy
+        ),
+    )
+    print(json.dumps({"status": payload["status"], "target_met": target_met, **performance}))
+
+
+def _arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the five-year sequential outer-OOS L4")
+    parser.add_argument("--history-release", type=Path, required=True)
+    parser.add_argument("--cache-dir", type=Path, required=True)
+    parser.add_argument("--l3-scores", type=Path, required=True)
+    parser.add_argument("--l3-metadata", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    return parser.parse_args()
+
+
+def _snapshots(
+    *,
+    session_dates: tuple[date, ...],
+    risk_snapshots: dict[date, Any],
+    scores: np.ndarray[Any, Any],
+    date_index: dict[date, int],
+    code_index: dict[str, int],
+) -> dict[date, SingleFactorSnapshot]:
+    result: dict[date, SingleFactorSnapshot] = {}
+    for trade_date in session_dates:
+        risk = risk_snapshots[trade_date]
+        row = scores[date_index[trade_date]]
+        observations = []
+        for item in risk.observations:
+            code = item.symbol.canonical.replace(".XSHG", ".SH").replace(".XSHE", ".SZ")
+            position = code_index.get(code)
+            value = float(row[position]) if position is not None else math.nan
+            observations.append(
+                SingleFactorObservation(
+                    item.symbol,
+                    trade_date,
+                    risk.asof_time,
+                    item.list_date,
+                    value if math.isfinite(value) else None,
+                    item.suspended,
+                    item.is_st,
+                    item.is_delisting_risk,
+                )
+            )
+        result[trade_date] = SingleFactorSnapshot(trade_date, risk.asof_time, tuple(observations))
+    return result
+
+
+def _rebalance_configs(
+    l3: dict[str, Any], session_dates: tuple[date, ...]
+) -> dict[date, SingleFactorConfig]:
+    result: dict[date, SingleFactorConfig] = {}
+    for fold in l3["folds"]:
+        start = date.fromisoformat(fold["test_start"])
+        end = date.fromisoformat(fold["test_end"])
+        fold_dates = tuple(day for day in session_dates if start <= day <= end)
+        selected = fold["l4_selection"]["selected"]
+        frequency = RebalanceFrequency(selected["frequency"])
+        config = SingleFactorConfig(
+            "nested_l3_size_neutral",
+            "1.0.0",
+            1,
+            target_count=int(selected["target_count"]),
+            minimum_constituents=max(30, int(selected["target_count"])),
+            minimum_listing_days=120,
+        )
+        for trade_date in generate_rebalance_dates(fold_dates, frequency):
+            result[trade_date] = config
+    if not result:
+        raise ValueError("nested L4 produced no rebalance configurations")
+    return result
+
+
+def _strategy_returns(equity_curve: tuple[Any, ...], initial: Decimal) -> dict[date, float]:
+    previous = float(initial)
+    result: dict[date, float] = {}
+    for snapshot in equity_curve:
+        equity = float(snapshot.equity)
+        result[snapshot.asof_time.date()] = equity / previous - 1
+        previous = equity
+    return result
+
+
+def _performance(
+    strategy: np.ndarray[Any, Any], benchmark: np.ndarray[Any, Any]
+) -> dict[str, float]:
+    excess = strategy - benchmark
+    annual_strategy = _annualized(strategy)
+    annual_benchmark = _annualized(benchmark)
+    standard_deviation = float(np.std(excess, ddof=1))
+    return {
+        "annual_return": annual_strategy,
+        "annual_benchmark_return": annual_benchmark,
+        "annual_excess_return": annual_strategy - annual_benchmark,
+        "excess_sharpe": (
+            float(np.mean(excess) / standard_deviation * np.sqrt(252))
+            if standard_deviation > 0
+            else 0.0
+        ),
+        "total_return": float(np.prod(1 + strategy) - 1),
+        "benchmark_total_return": float(np.prod(1 + benchmark) - 1),
+    }
+
+
+def _annualized(returns: np.ndarray[Any, Any]) -> float:
+    total = float(np.prod(1 + returns))
+    return total ** (252 / len(returns)) - 1 if total > 0 else -1.0
+
+
+def _markdown(payload: dict[str, Any]) -> str:
+    performance = payload["performance"]
+    return f"""# AQuant Nested Walk-Forward L4 Backtest
+
+- Status: `{payload["status"]}`
+- Period: {payload["start_date"]} to {payload["end_date"]}
+- Initial equity: CNY {payload["initial_equity"]}
+- Annual return: {performance["annual_return"]:.2%}
+- Proxy annual return: {performance["annual_benchmark_return"]:.2%}
+- Annual excess return: {performance["annual_excess_return"]:.2%}
+- Excess Sharpe: {performance["excess_sharpe"]:.3f}
+- Target met: `{payload["target_met"]}`
+- Outer test used for optimization: `False`
+- T+1 attested: `{payload["execution"]["t_plus_one_attested"]}`
+
+Benchmark is `PIT_ALL_A_SHARE_DAILY_EQUAL_PROXY`, not the official Wind All-A index.
+"""
+
+
+def _hash(value: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
+
+
+def _file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while block := stream.read(1024 * 1024):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _write(path: Path, content: str) -> None:
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(content, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+if __name__ == "__main__":
+    main()

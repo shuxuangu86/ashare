@@ -183,12 +183,18 @@ class SingleFactorEqualWeightStrategy:
         *,
         snapshots: Mapping[date, SingleFactorSnapshot],
         rebalance_dates: Set[date],
-        config: SingleFactorConfig,
+        config: SingleFactorConfig | None = None,
+        config_by_rebalance_date: Mapping[date, SingleFactorConfig] | None = None,
     ) -> None:
+        dated = dict(config_by_rebalance_date or {})
+        if (config is None) == (not dated):
+            raise ValueError("provide exactly one fixed or dated single-factor configuration")
+        if dated and dated.keys() != set(rebalance_dates):
+            raise ValueError("dated configurations must exactly match rebalance dates")
         self._snapshots = dict(snapshots)
         self._rebalance_dates = frozenset(rebalance_dates)
         self._config = config
-        self._selector = SingleFactorSelector(config)
+        self._dated_configs = dated
         self._last_risk_state: dict[Symbol, SingleFactorObservation] = {}
 
     def on_close(self, context: StrategyContext) -> tuple[OrderRequest, ...]:
@@ -204,15 +210,18 @@ class SingleFactorEqualWeightStrategy:
                 context.session.status_by_symbol(),
             )
 
-        selection = self._selector.select(snapshot)
+        config = self._dated_configs.get(trade_date, self._config)
+        if config is None:
+            raise ValueError(f"single-factor configuration is missing for {trade_date}")
+        selection = SingleFactorSelector(config).select(snapshot)
         bars = context.session.bar_by_symbol()
         missing_bars = tuple(symbol for symbol in selection.symbols if symbol not in bars)
         if missing_bars:
             raise ValueError(f"selected single-factor symbols are missing bars: {missing_bars[:3]}")
-        investable = context.portfolio.equity * (Decimal("1") - self._config.cash_buffer_weight)
+        investable = context.portfolio.equity * (Decimal("1") - config.cash_buffer_weight)
         per_security = investable / len(selection.symbols)
         target = {
-            symbol: self._round_lot(per_security / bars[symbol].close)
+            symbol: self._round_lot(per_security / bars[symbol].close, config.lot_size)
             for symbol in selection.symbols
         }
         if any(quantity <= 0 for quantity in target.values()):
@@ -234,9 +243,10 @@ class SingleFactorEqualWeightStrategy:
             raise ValueError("single-factor snapshot was unavailable at signal time")
         return snapshot
 
-    def _round_lot(self, quantity: Decimal) -> int:
-        lots = (quantity / self._config.lot_size).to_integral_value(rounding=ROUND_FLOOR)
-        return int(lots) * self._config.lot_size
+    @staticmethod
+    def _round_lot(quantity: Decimal, lot_size: int) -> int:
+        lots = (quantity / lot_size).to_integral_value(rounding=ROUND_FLOOR)
+        return int(lots) * lot_size
 
     def _hard_exits(
         self,
