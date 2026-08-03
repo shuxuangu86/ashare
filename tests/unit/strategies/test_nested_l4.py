@@ -67,12 +67,14 @@ def test_outer_fold_performance_is_reported_separately() -> None:
         ],
         aligned_dates=dates,
         strategy_returns=dict(zip(dates, (0.01, 0.01, 0.00, 0.00), strict=True)),
-        benchmark_returns=dict(zip(dates, (0.00, 0.00, 0.01, 0.01), strict=True)),
+        benchmark_returns=dict(zip(dates, (0.00, 0.00, 0.01, 0.02), strict=True)),
     )
 
     assert [fold["sessions"] for fold in result] == [2, 2]
     assert result[0]["annual_excess_return"] > 0
     assert result[1]["annual_excess_return"] < 0
+    assert result[0]["relative_maximum_drawdown"] <= 0
+    assert result[1]["tracking_error"] > 0
 
     curve = _daily_curve_csv(
         folds=[
@@ -81,7 +83,7 @@ def test_outer_fold_performance_is_reported_separately() -> None:
         ],
         aligned_dates=dates,
         strategy_returns=dict(zip(dates, (0.01, 0.01, 0.00, 0.00), strict=True)),
-        benchmark_returns=dict(zip(dates, (0.00, 0.00, 0.01, 0.01), strict=True)),
+        benchmark_returns=dict(zip(dates, (0.00, 0.00, 0.01, 0.02), strict=True)),
     )
     rows = curve.splitlines()
     assert len(rows) == 5

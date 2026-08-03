@@ -265,16 +265,25 @@ def _performance(
     excess = strategy - benchmark
     annual_strategy = _annualized(strategy)
     annual_benchmark = _annualized(benchmark)
-    standard_deviation = float(np.std(excess, ddof=1))
+    strategy_standard_deviation = float(np.std(strategy, ddof=1))
+    benchmark_standard_deviation = float(np.std(benchmark, ddof=1))
+    excess_standard_deviation = float(np.std(excess, ddof=1))
     return {
         "annual_return": annual_strategy,
         "annual_benchmark_return": annual_benchmark,
         "annual_excess_return": annual_strategy - annual_benchmark,
+        "annual_volatility": strategy_standard_deviation * np.sqrt(252),
+        "annual_benchmark_volatility": benchmark_standard_deviation * np.sqrt(252),
+        "tracking_error": excess_standard_deviation * np.sqrt(252),
         "excess_sharpe": (
-            float(np.mean(excess) / standard_deviation * np.sqrt(252))
-            if standard_deviation > 0
+            float(np.mean(excess) / excess_standard_deviation * np.sqrt(252))
+            if excess_standard_deviation > 0
             else 0.0
         ),
+        "maximum_drawdown": _maximum_drawdown(strategy),
+        "benchmark_maximum_drawdown": _maximum_drawdown(benchmark),
+        "relative_maximum_drawdown": _relative_maximum_drawdown(strategy, benchmark),
+        "positive_excess_day_ratio": float(np.mean(excess > 0)),
         "total_return": float(np.prod(1 + strategy) - 1),
         "benchmark_total_return": float(np.prod(1 + benchmark) - 1),
     }
@@ -366,6 +375,23 @@ def _annualized(returns: np.ndarray[Any, Any]) -> float:
     return total ** (252 / len(returns)) - 1 if total > 0 else -1.0
 
 
+def _maximum_drawdown(returns: np.ndarray[Any, Any]) -> float:
+    net_value = np.cumprod(1 + returns)
+    peaks = np.maximum.accumulate(np.concatenate(([1.0], net_value)))
+    return float(np.min(np.concatenate(([1.0], net_value)) / peaks - 1))
+
+
+def _relative_maximum_drawdown(
+    strategy: np.ndarray[Any, Any], benchmark: np.ndarray[Any, Any]
+) -> float:
+    benchmark_net_value = np.cumprod(1 + benchmark)
+    if np.any(benchmark_net_value <= 0):
+        raise ValueError("benchmark net value must remain positive")
+    relative = np.cumprod(1 + strategy) / benchmark_net_value
+    peaks = np.maximum.accumulate(np.concatenate(([1.0], relative)))
+    return float(np.min(np.concatenate(([1.0], relative)) / peaks - 1))
+
+
 def _markdown(payload: dict[str, Any]) -> str:
     performance = payload["performance"]
     fold_rows = "\n".join(
@@ -385,6 +411,9 @@ def _markdown(payload: dict[str, Any]) -> str:
 - Proxy annual return: {performance["annual_benchmark_return"]:.2%}
 - Annual excess return: {performance["annual_excess_return"]:.2%}
 - Excess Sharpe: {performance["excess_sharpe"]:.3f}
+- Tracking error: {performance["tracking_error"]:.2%}
+- Maximum drawdown: {performance["maximum_drawdown"]:.2%}
+- Relative maximum drawdown: {performance["relative_maximum_drawdown"]:.2%}
 - Target met: `{payload["target_met"]}`
 - Outer test used for optimization: `False`
 - T+1 attested: `{payload["execution"]["t_plus_one_attested"]}`
