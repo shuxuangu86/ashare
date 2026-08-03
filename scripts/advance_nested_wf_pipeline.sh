@@ -12,6 +12,7 @@ union_cache="/mnt/d/AQuantEvaluation/convergence/l3-nested-union-size-2016-2026-
 l3_scores="/mnt/d/AQuantEvaluation/l3_nested_walk_forward/l3_scores.npy"
 l3_metadata="artifacts/l3_nested_walk_forward/l3_metadata.json"
 l4_output="artifacts/l3_nested_walk_forward/l4_backtest"
+windows_export="/mnt/c/Users/Admin/Documents/A-share Quant/AQuant Reports/nested-walk-forward"
 
 mkdir -p artifacts/logs artifacts/l3_nested_walk_forward \
   /mnt/d/AQuantEvaluation/l3_nested_walk_forward
@@ -51,7 +52,18 @@ if [[ "${1:-}" == "--l4-worker" ]]; then
     --l3-metadata "${l3_metadata}" \
     --output-dir "${l4_output}" \
     --code-version "$(git rev-parse HEAD)"
-  printf '%s\tPASS\n' "$(date --iso-8601=seconds)" >artifacts/logs/nested-l4.status
+  mkdir -p "${windows_export}"
+  cp "${l4_output}/nested_l4_backtest.json" \
+    "${l4_output}/nested_l4_backtest.md" \
+    "${l4_output}/nested_l4_daily_oos.csv" \
+    "${l4_output}/nested_l4_fills.csv" \
+    "${l4_output}/benchmark_proxy.csv" \
+    "${l3_metadata}" \
+    "${pool}" \
+    "${windows_export}/"
+  printf '%s\tPASS\texport=%s\n' \
+    "$(date --iso-8601=seconds)" "${windows_export}" \
+    >artifacts/logs/nested-l4.status
   exit 0
 fi
 
