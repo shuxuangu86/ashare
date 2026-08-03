@@ -79,7 +79,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--backtest-end", type=date.fromisoformat, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fold-count", type=int, default=5)
-    parser.add_argument("--purge-observations", type=int, default=5)
+    parser.add_argument("--purge-observations", type=int, default=6)
     parser.add_argument("--maximum-family-members", type=int, default=9)
     return parser.parse_args()
 

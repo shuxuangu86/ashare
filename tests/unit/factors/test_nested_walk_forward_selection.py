@@ -30,7 +30,7 @@ def test_nested_selection_does_not_use_outer_values(tmp_path: Path) -> None:
         evidence_dates=dates,
         outer_dates=outer_dates,
         output=tmp_path / "first.json",
-        purge_observations=5,
+        purge_observations=6,
         fold_count=2,
         minimum_observations=50,
     )
@@ -42,7 +42,7 @@ def test_nested_selection_does_not_use_outer_values(tmp_path: Path) -> None:
         evidence_dates=dates,
         outer_dates=outer_dates,
         output=tmp_path / "second.json",
-        purge_observations=5,
+        purge_observations=6,
         fold_count=2,
         minimum_observations=50,
     )
@@ -62,13 +62,13 @@ def test_nested_selection_purges_label_overlap(tmp_path: Path) -> None:
         evidence_dates=dates,
         outer_dates=dates[200:],
         output=tmp_path / "pool.json",
-        purge_observations=5,
+        purge_observations=6,
         fold_count=2,
         minimum_observations=50,
     )
 
     first = payload["folds"][0]
-    assert first["train_end_after_purge"] == dates[194].isoformat()
+    assert first["train_end_after_purge"] == dates[193].isoformat()
     assert first["test_start"] == dates[200].isoformat()
     assert Path(tmp_path / "pool.json").is_file()
 

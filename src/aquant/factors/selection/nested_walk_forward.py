@@ -53,7 +53,7 @@ def build_nested_l2_pools(
     evidence_dates: tuple[date, ...],
     outer_dates: tuple[date, ...],
     output: Path,
-    purge_observations: int = 5,
+    purge_observations: int = 6,
     fold_count: int = 5,
     maximum_family_members: int = 9,
     correlation_threshold: float = 0.995,
@@ -63,8 +63,8 @@ def build_nested_l2_pools(
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Select each outer fold's L2 pool using only purged preceding RankIC evidence."""
-    if purge_observations < 1:
-        raise ValueError("purge_observations must be positive")
+    if purge_observations < 6:
+        raise ValueError("five-day T+1 labels require at least six purged observations")
     if maximum_family_members < 5:
         raise ValueError("maximum_family_members must allow five family archetypes")
     if tuple(sorted(set(evidence_dates))) != evidence_dates:
