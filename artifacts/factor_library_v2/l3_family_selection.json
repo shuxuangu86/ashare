@@ -1,0 +1,456 @@
+{
+  "complexity_penalty": 0.001,
+  "content_hash": "6764e875f937236a5de37c477687ac49c6db2ecee702e2a6253f55c643b7dd15",
+  "data_release_id": "cn_equity_20260717_001",
+  "evaluation_code_version": "6a3c0d8dc72650573fc0e507fd1d40f8b6104ded",
+  "families": [
+    {
+      "development_fold_rank_ic": [
+        0.05339793439772868,
+        0.06599869329365433
+      ],
+      "development_mean_rank_ic": 0.059698313845691506,
+      "factor_ids": [
+        "tech_boll_window10_cross_state",
+        "tech_boll_window10_divergence_with_volume",
+        "tech_boll_window20_level",
+        "tech_boll_window20_state_duration",
+        "tech_boll_window60_level",
+        "tech_boll_window60_state_duration",
+        "tech_donchian_window120_divergence_with_price",
+        "tech_donchian_window120_recovery_from_extreme",
+        "tech_donchian_window30_zscore"
+      ],
+      "family": "channel",
+      "generalization_ratio": 0.6895815425230015,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.041166855347734205,
+      "selected_method": "equal_weight",
+      "selection_score": 0.0581232189837008
+    },
+    {
+      "development_fold_rank_ic": [
+        0.08122900984536667,
+        0.09426500494271385
+      ],
+      "development_mean_rank_ic": 0.08774700739404026,
+      "factor_ids": [
+        "alpha101_001",
+        "alpha101_044",
+        "gtja191_070",
+        "gtja191_081",
+        "gtja191_097",
+        "gtja191_100",
+        "gtja191_129",
+        "gtja191_146",
+        "gtja191_165"
+      ],
+      "family": "formula_alpha",
+      "generalization_ratio": 0.7300455338155957,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.06405931085370314,
+      "selected_method": "ic_weight",
+      "selection_score": 0.08511750800687186
+    },
+    {
+      "development_fold_rank_ic": [
+        0.017037004211733126,
+        0.01173384094747337
+      ],
+      "development_mean_rank_ic": 0.014385422579603247,
+      "factor_ids": [
+        "growth_quality",
+        "growth_revision_intensity_60d",
+        "growth_stability_120d",
+        "growth_to_value",
+        "net_profit_growth_acceleration_60d",
+        "net_profit_growth_change_20d",
+        "net_profit_growth_yoy"
+      ],
+      "family": "growth",
+      "generalization_ratio": 1.1125839697932205,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.016004990560768012,
+      "selected_method": "equal_weight",
+      "selection_score": 0.013722527171570778
+    },
+    {
+      "development_fold_rank_ic": [
+        0.03957396896481348,
+        0.06395346772620421
+      ],
+      "development_mean_rank_ic": 0.051763718345508844,
+      "factor_ids": [
+        "ma_signal_x_idiosyncratic_volatility",
+        "ma_signal_x_liquidity",
+        "ma_signal_x_size",
+        "ma_signal_x_turnover",
+        "ma_signal_x_volatility",
+        "trend_x_information_uncertainty_proxy"
+      ],
+      "family": "interaction",
+      "generalization_ratio": 0.6451574330555687,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.033395747653199935,
+      "selected_method": "equal_weight",
+      "selection_score": 0.048716281000335
+    },
+    {
+      "development_fold_rank_ic": [
+        0.0716161671514843,
+        0.09163684811220581
+      ],
+      "development_mean_rank_ic": 0.08162650763184506,
+      "factor_ids": [
+        "amount_concentration_20d",
+        "amount_shock",
+        "liquidity_dry_up_5_60",
+        "turnover_change_20d",
+        "turnover_shock_60d",
+        "turnover_trend_20d",
+        "turnover_volatility",
+        "volume_concentration_20d",
+        "zero_return_days_20d"
+      ],
+      "family": "liquidity",
+      "generalization_ratio": 0.7027391402976791,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.05736214179870475,
+      "selected_method": "ic_weight",
+      "selection_score": 0.07812392251175487
+    },
+    {
+      "development_fold_rank_ic": [
+        0.08992658650698587,
+        0.08532062686143911
+      ],
+      "development_mean_rank_ic": 0.08762360668421248,
+      "factor_ids": [
+        "limit_down_sell_risk",
+        "limit_up_buy_risk",
+        "low_price_risk",
+        "microcap_crowding_proxy",
+        "microcap_growth_quality",
+        "microcap_score"
+      ],
+      "family": "microcap_risk",
+      "generalization_ratio": 0.5457755059913686,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.04782281827486474,
+      "selected_method": "ic_weight",
+      "selection_score": 0.08604786172851914
+    },
+    {
+      "development_fold_rank_ic": [
+        0.03725993272193711,
+        0.06592299969184522
+      ],
+      "development_mean_rank_ic": 0.05159146620689116,
+      "factor_ids": [
+        "tech_coppock_window10_cross_state",
+        "tech_coppock_window10_level",
+        "tech_coppock_window10_recovery_from_extreme",
+        "tech_coppock_window20_state_duration",
+        "tech_mtm_window10_level",
+        "tech_mtm_window120_state_duration",
+        "tech_mtm_window60_level",
+        "tech_mtm_window60_state_duration",
+        "tech_roc_window60_zscore"
+      ],
+      "family": "momentum",
+      "generalization_ratio": 0.8766512198079004,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.045227721781949205,
+      "selected_method": "equal_weight",
+      "selection_score": 0.048008582835652645
+    },
+    {
+      "development_fold_rank_ic": [
+        0.06169441268805687,
+        0.06066267833480253
+      ],
+      "development_mean_rank_ic": 0.061178545511429705,
+      "factor_ids": [
+        "tech_cci_window10_cross_state",
+        "tech_cci_window10_divergence_with_volume",
+        "tech_cci_window60_recovery_from_extreme",
+        "tech_cci_window60_state_duration",
+        "tech_rvi_window10_level",
+        "tech_rvi_window10_state_duration",
+        "tech_rvi_window14_cross_state",
+        "tech_rvi_window14_level",
+        "tech_rvi_window20_zscore"
+      ],
+      "family": "oscillator",
+      "generalization_ratio": 0.7537831130764001,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.04611535448909171,
+      "selected_method": "ic_weight",
+      "selection_score": 0.060049578717272914
+    },
+    {
+      "development_fold_rank_ic": [
+        0.07683874204271343,
+        0.0927822025171897
+      ],
+      "development_mean_rank_ic": 0.08481047227995156,
+      "factor_ids": [
+        "days_since_20d_high",
+        "gap_return",
+        "high_low_range",
+        "limit_up_frequency_20d",
+        "price_volume_corr_20d",
+        "range_contraction_5_20",
+        "return_volume_corr_20d",
+        "volume_price_divergence",
+        "vwap_deviation"
+      ],
+      "family": "price_volume",
+      "generalization_ratio": 0.6871188946703168,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.05827487796946786,
+      "selected_method": "ic_weight",
+      "selection_score": 0.08181753972064203
+    },
+    {
+      "development_fold_rank_ic": [
+        0.005850847117456705,
+        0.0024910919086124726
+      ],
+      "development_mean_rank_ic": 0.004170969513034589,
+      "factor_ids": [
+        "inverse_leverage",
+        "profit_growth_stability_60d"
+      ],
+      "family": "quality",
+      "generalization_ratio": 2.484165853891599,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.010361380041903397,
+      "selected_method": "ic_weight",
+      "selection_score": 0.0027510001119290597
+    },
+    {
+      "development_fold_rank_ic": [
+        0.04203459431517071,
+        0.0786264300168951
+      ],
+      "development_mean_rank_ic": 0.0603305121660329,
+      "factor_ids": [
+        "tech_hurst_window120_delta",
+        "tech_hurst_window120_level",
+        "tech_hurst_window252_delta",
+        "tech_hurst_window252_level",
+        "tech_hurst_window30_level",
+        "tech_hurst_window30_recovery_from_extreme",
+        "tech_hurst_window30_state_duration",
+        "tech_hurst_window60_level",
+        "tech_hurst_window60_normalized_level"
+      ],
+      "family": "regime",
+      "generalization_ratio": 0.6932340343444626,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.04182316434292667,
+      "selected_method": "ic_weight",
+      "selection_score": 0.05475653270331735
+    },
+    {
+      "development_fold_rank_ic": [
+        0.0642298662886101,
+        0.07550292639673978
+      ],
+      "development_mean_rank_ic": 0.06986639634267494,
+      "factor_ids": [
+        "intraday_reversal",
+        "reversal_10d",
+        "reversal_20d",
+        "tech_bias_window120_divergence_with_price",
+        "tech_bias_window120_recovery_from_extreme",
+        "tech_bias_window120_zscore",
+        "tech_bias_window20_level",
+        "tech_bias_window60_level",
+        "tech_bias_window60_state_duration"
+      ],
+      "family": "reversal",
+      "generalization_ratio": 0.6266572626552371,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.04378228468368655,
+      "selected_method": "equal_weight",
+      "selection_score": 0.06845726382915873
+    },
+    {
+      "development_fold_rank_ic": [
+        0.03435569942871301,
+        0.06952035763081711
+      ],
+      "development_mean_rank_ic": 0.05193802852976506,
+      "factor_ids": [
+        "log_float_market_cap",
+        "log_total_market_cap"
+      ],
+      "family": "size",
+      "generalization_ratio": 0.15354783359727808,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.007974971762059047,
+      "selected_method": "equal_weight",
+      "selection_score": 0.04754244625450205
+    },
+    {
+      "development_fold_rank_ic": [
+        0.050684483266665324,
+        0.07490124681200466
+      ],
+      "development_mean_rank_ic": 0.062792865039335,
+      "factor_ids": [
+        "cn_rule_channel_w100_b0000_hold1",
+        "cn_rule_channel_w100_b1000_hold5",
+        "cn_rule_channel_w10_b0000_hold10",
+        "cn_rule_ma_s20_l250_b0050_hold1",
+        "cn_rule_ma_s2_l100_b0000_hold1",
+        "cn_rule_obvma_s20_l250_b0000_hold1",
+        "cn_rule_sr_w10_b0000_hold10",
+        "cn_rule_sr_w10_b0050_hold10",
+        "cn_rule_sr_w10_b0100_hold10"
+      ],
+      "family": "technical_rule",
+      "generalization_ratio": 0.6732228796567407,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.04227359342367818,
+      "selected_method": "equal_weight",
+      "selection_score": 0.05976576959616758
+    },
+    {
+      "development_fold_rank_ic": [
+        0.05036827412325686,
+        0.043906831902323994
+      ],
+      "development_mean_rank_ic": 0.04713755301279043,
+      "factor_ids": [
+        "bearish_signal_count",
+        "bullish_signal_count",
+        "net_technical_sentiment",
+        "oscillator_signal_breadth",
+        "trend_signal_breadth"
+      ],
+      "family": "technical_sentiment",
+      "generalization_ratio": 0.6335054602566265,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.02986189721673893,
+      "selected_method": "equal_weight",
+      "selection_score": 0.04632987273517382
+    },
+    {
+      "development_fold_rank_ic": [
+        0.0568342437978933,
+        0.07171799249381047
+      ],
+      "development_mean_rank_ic": 0.06427611814585188,
+      "factor_ids": [
+        "hyz_ma_signal_5_20",
+        "tech_adx_window10_recovery_from_extreme",
+        "tech_dmi_window10_level",
+        "tech_dmi_window10_state_duration",
+        "tech_dmi_window14_cross_state",
+        "tech_dmi_window14_level",
+        "tech_ema_window60_state_duration",
+        "tech_macd_fast6_signal5_slow13_divergence_with_volume",
+        "tech_sma_window252_slope"
+      ],
+      "family": "trend",
+      "generalization_ratio": 0.7840845932990694,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.05039791395523321,
+      "selected_method": "icir_weight",
+      "selection_score": 0.06041564955886223
+    },
+    {
+      "development_fold_rank_ic": [
+        0.06286598486359979,
+        0.04201766127317247
+      ],
+      "development_mean_rank_ic": 0.05244182306838613,
+      "factor_ids": [
+        "book_to_market",
+        "dividend_yield",
+        "leverage_adjusted_value"
+      ],
+      "family": "value",
+      "generalization_ratio": 0.43040917915660665,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.022571442020340074,
+      "selected_method": "ridge",
+      "selection_score": 0.04683578261958271
+    },
+    {
+      "development_fold_rank_ic": [
+        0.08508777867364373,
+        0.09119574018086912
+      ],
+      "development_mean_rank_ic": 0.08814175942725642,
+      "factor_ids": [
+        "downside_volatility_20d",
+        "high_low_range_volatility_20d",
+        "max_daily_return_20d",
+        "residual_volatility_20d",
+        "return_skewness_60d",
+        "tech_atr_window10_level",
+        "tech_atr_window60_level",
+        "tech_atr_window60_recovery_from_extreme",
+        "volatility_10d"
+      ],
+      "family": "volatility",
+      "generalization_ratio": 0.5876494121476457,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.05179645311308644,
+      "selected_method": "equal_weight",
+      "selection_score": 0.08737826423885325
+    },
+    {
+      "development_fold_rank_ic": [
+        0.06545984052229421,
+        0.07628289991048148
+      ],
+      "development_mean_rank_ic": 0.07087137021638784,
+      "factor_ids": [
+        "tech_force_window13_cross_state",
+        "tech_force_window13_level",
+        "tech_force_window13_state_duration",
+        "tech_force_window26_level",
+        "tech_force_window26_state_duration",
+        "tech_obv_window60_level",
+        "tech_vr_window14_divergence_with_volume",
+        "tech_vr_window26_recovery_from_extreme",
+        "tech_vr_window60_state_duration"
+      ],
+      "family": "volume_price",
+      "generalization_ratio": 0.6795622589588621,
+      "holdout_direction_consistent": true,
+      "holdout_rank_ic": 0.048161508439758347,
+      "selected_method": "ic_weight",
+      "selection_score": 0.06851848779286443
+    }
+  ],
+  "family_count": 19,
+  "feature_eligible_pool_hash": "3e4076fa561498f2dc6c557aa910e0a896c9000dbea76db70a12360c880a5fd0",
+  "holdout_fold": 2,
+  "holdout_positive_family_count": 19,
+  "holdout_used_for_selection": false,
+  "industry_neutralization": "IGNORED_BY_USER_DIRECTION",
+  "input_neutralization": "SIZE_NEUTRAL",
+  "mean_family_holdout_rank_ic": 0.039917601459415496,
+  "next_stage": "L3_CROSS_FAMILY_WALK_FORWARD",
+  "research_status": "RESEARCH_ONLY",
+  "selected_method_counts": {
+    "equal_weight": 9,
+    "ic_weight": 8,
+    "icir_weight": 1,
+    "ridge": 1
+  },
+  "selection_folds": [
+    0,
+    1
+  ],
+  "source_smoke_hash": "5d58b2128228d9195065b5223351373b598800bccfa34bc6ea898f5bdfe69156",
+  "stability_penalty": 0.25,
+  "stage": "L3_FAMILY_MODEL_SELECTION",
+  "status": "PASS"
+}
