@@ -86,7 +86,9 @@ def _arguments() -> argparse.Namespace:
 
 def _complete_manifest(report_dir: Path) -> dict[str, Any]:
     manifest = json.loads((report_dir / "evaluation_manifest.json").read_text())
-    if manifest.get("completed_count") != manifest.get("factor_count"):
+    if manifest.get("status") != "PASS" or manifest.get("completed_count") != manifest.get(
+        "factor_count"
+    ):
         raise ValueError(f"evaluation is incomplete: {report_dir}")
     return manifest
 
