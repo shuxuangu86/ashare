@@ -17,6 +17,23 @@ if [[ ! -f "${pool}" ]]; then
   exit 2
 fi
 
+cache_metadata="${cache_dir}/metadata.json"
+if [[ ! -f "${cache_metadata}" ]]; then
+  union_factor_count="$(.venv/bin/python -c \
+    'import json,sys; print(json.load(open(sys.argv[1]))["union_factor_count"])' "${pool}")"
+  estimated_cache_bytes="$((union_factor_count * 64 * 1024 * 1024))"
+  safety_margin_bytes="$((5 * 1024 * 1024 * 1024))"
+  available_bytes="$(df --output=avail -B1 /mnt/d | tail -n 1 | tr -d ' ')"
+  required_bytes="$((estimated_cache_bytes + safety_margin_bytes))"
+  if (( available_bytes < required_bytes )); then
+    printf '%s\tWAITING_FOR_DISK\trequired_bytes=%s\tavailable_bytes=%s\n' \
+      "$(date --iso-8601=seconds)" "${required_bytes}" "${available_bytes}" \
+      >"${status_file}"
+    echo "WAIT_DISK required_bytes=${required_bytes} available_bytes=${available_bytes}"
+    exit 0
+  fi
+fi
+
 if [[ "${1:-}" != "--worker" ]]; then
   if [[ -f "${pid_file}" ]] && kill -0 "$(cat "${pid_file}")" 2>/dev/null; then
     echo "nested union materialization already running with pid $(cat "${pid_file}")"
