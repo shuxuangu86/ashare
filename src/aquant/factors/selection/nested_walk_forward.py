@@ -282,8 +282,11 @@ def _deduplicate(records: dict[str, dict[str, Any]], *, threshold: float) -> dic
                 (
                     kept
                     for kept in representatives
-                    if _pair_correlation(
-                        records[factor_id]["rank_ic_series"], records[kept]["rank_ic_series"]
+                    if abs(
+                        _pair_correlation(
+                            records[factor_id]["rank_ic_series"],
+                            records[kept]["rank_ic_series"],
+                        )
                     )
                     >= threshold
                 ),

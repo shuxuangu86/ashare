@@ -87,6 +87,24 @@ def test_nested_selection_rejects_misaligned_series(tmp_path: Path) -> None:
         )
 
 
+def test_nested_selection_deduplicates_sign_mirrors(tmp_path: Path) -> None:
+    dates = tuple(date(2020, 1, 1) + timedelta(days=index) for index in range(260))
+    records = _records(len(dates))
+    records["b"]["expected_direction"] = 1
+    records["b"]["rank_ic"] = -np.asarray(records["a"]["rank_ic"])
+    payload = build_nested_l2_pools(
+        factor_records=records,
+        evidence_dates=dates,
+        outer_dates=dates[200:],
+        output=tmp_path / "pool.json",
+        purge_observations=6,
+        fold_count=2,
+        minimum_observations=50,
+    )
+
+    assert payload["folds"][0]["diagnostics"]["duplicate_count"] == 1
+
+
 def _records(length: int) -> dict[str, dict[str, object]]:
     x = np.linspace(0, 8 * np.pi, length)
     return {
