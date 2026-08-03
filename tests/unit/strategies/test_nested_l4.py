@@ -38,6 +38,24 @@ def test_l4_configuration_uses_only_supplied_inner_validation() -> None:
     assert first == second
     assert first["outer_test_used_for_selection"] is False
     assert len(first["candidates"]) == 4
+    assert first["trial_count"] == 4
+    assert first["execution_model"].endswith("CONSERVATIVE_PROXY")
+
+    default_search = select_l4_configuration(
+        scores=scores,
+        close=close,
+        trade_dates=dates,
+        validation_positions=validation,
+    )
+    assert default_search["trial_count"] == 10
+    assert {candidate["target_count"] for candidate in default_search["candidates"]} == {
+        20,
+        30,
+        50,
+        80,
+        100,
+    }
+    assert all("target_met" in candidate for candidate in default_search["candidates"])
 
 
 def test_outer_fold_performance_is_reported_separately() -> None:

@@ -21,7 +21,7 @@ def select_l4_configuration(
     close: npt.ArrayLike,
     trade_dates: tuple[date, ...],
     validation_positions: npt.NDArray[np.int64],
-    target_counts: tuple[int, ...] = (30, 50, 80, 100),
+    target_counts: tuple[int, ...] = (20, 30, 50, 80, 100),
     frequencies: tuple[RebalanceFrequency, ...] = (
         RebalanceFrequency.WEEKLY,
         RebalanceFrequency.MONTHLY,
@@ -57,6 +57,7 @@ def select_l4_configuration(
     selected = max(
         candidates,
         key=lambda item: (
+            bool(item["target_met"]),
             float(item["selection_score"]),
             -float(item["annual_turnover"]),
             -int(item["target_count"]),
@@ -66,8 +67,13 @@ def select_l4_configuration(
         "selection_window_start": trade_dates[int(validation_positions[0])].isoformat(),
         "selection_window_end": trade_dates[int(validation_positions[-1])].isoformat(),
         "cost_bps": cost_bps,
+        "trial_count": len(candidates),
         "outer_test_used_for_selection": False,
         "objective": "annual_excess_return_plus_0.05_times_excess_sharpe",
+        "target_definition": (
+            "annual_excess_return>=0.15 OR (annual_excess_return>=0.10 AND excess_sharpe>0.8)"
+        ),
+        "execution_model": "T_CLOSE_SIGNAL_DELAYED_CLOSE_ACTIVATION_CONSERVATIVE_PROXY",
         "selected": selected,
         "candidates": candidates,
     }
@@ -136,6 +142,7 @@ def _simulate(
         else 0.0
     )
     annual_excess = annual_strategy - annual_benchmark
+    target_met = bool(annual_excess >= 0.15 or (annual_excess >= 0.10 and excess_sharpe > 0.8))
     return {
         "target_count": target_count,
         "frequency": frequency.value,
@@ -145,6 +152,7 @@ def _simulate(
         "annual_benchmark_return": annual_benchmark,
         "annual_excess_return": annual_excess,
         "excess_sharpe": excess_sharpe,
+        "target_met": target_met,
         "annual_turnover": total_turnover * 252 / observations,
         "maximum_drawdown": _maximum_drawdown(strategy),
         "selection_score": annual_excess + 0.05 * excess_sharpe,
