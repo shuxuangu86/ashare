@@ -87,6 +87,7 @@ def run_nested_l3(
                 factor_index=factor_index,
                 date_index=date_index,
                 fold=fold,
+                label_horizon=horizon,
                 inner_validation_dates=inner_validation_dates,
                 inner_purge_dates=inner_purge_dates,
                 maximum_training_rows=maximum_training_rows,
@@ -148,6 +149,7 @@ def _train_fold(
     factor_index: dict[str, int],
     date_index: dict[date, int],
     fold: dict[str, Any],
+    label_horizon: int,
     inner_validation_dates: int,
     inner_purge_dates: int,
     maximum_training_rows: int,
@@ -157,6 +159,8 @@ def _train_fold(
     train_end = date_index[date.fromisoformat(fold["train_end_after_purge"])]
     test_start = date_index[date.fromisoformat(fold["test_start"])]
     test_end = date_index[date.fromisoformat(fold["test_end"])] + 1
+    if test_start - train_end <= label_horizon + 1:
+        raise ValueError(f"fold {fold['fold']} training labels overlap the outer test boundary")
     visible = np.arange(train_end + 1, dtype=np.int64)
     if len(visible) <= inner_validation_dates + inner_purge_dates + 20:
         raise ValueError(f"fold {fold['fold']} has insufficient inner training history")
