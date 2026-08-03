@@ -122,6 +122,37 @@ def selected_factors(value: str) -> tuple[AtomicFactor, ...]:
     return tuple(by_id[item] for item in requested)
 
 
+def _filter_factor_ids(
+    factors: tuple[AtomicFactor, ...], factor_ids_path: Path | None
+) -> tuple[tuple[AtomicFactor, ...], str | None]:
+    if factor_ids_path is None:
+        return factors, None
+    payload = json.loads(factor_ids_path.read_text(encoding="utf-8"))
+    identifiers = (
+        payload
+        if isinstance(payload, list)
+        else payload.get("union_factor_ids")
+        if isinstance(payload, dict)
+        else None
+    )
+    if not isinstance(identifiers, list) or not identifiers:
+        raise ValueError("factor ids file must be a non-empty list or contain union_factor_ids")
+    if any(not isinstance(item, str) or not item for item in identifiers):
+        raise ValueError("factor ids must be non-empty strings")
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError("factor ids file contains duplicates")
+    requested = set(identifiers)
+    available = {factor.spec.factor_id for factor in factors}
+    missing = sorted(requested - available)
+    if missing:
+        raise ValueError(f"factor ids are not in the selected factor set: {missing[:10]}")
+    selected = tuple(factor for factor in factors if factor.spec.factor_id in requested)
+    subset_hash = hashlib.sha256(
+        json.dumps(sorted(requested), separators=(",", ":")).encode()
+    ).hexdigest()
+    return selected, subset_hash
+
+
 def _release(value: str) -> DataReleaseId:
     return DataReleaseId(value)
 
@@ -224,6 +255,11 @@ def materialize_factors_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-root", type=Path, default=Path("data/factors"))
     parser.add_argument("--data-release-id", type=_release, required=True)
     parser.add_argument("--factor-set", default="baseline_v1")
+    parser.add_argument(
+        "--factor-ids-file",
+        type=Path,
+        help="optional JSON list or nested L2 pool artifact containing union_factor_ids",
+    )
     parser.add_argument("--start-date", type=parse_date, required=True)
     parser.add_argument("--end-date", type=parse_date, required=True)
     parser.add_argument("--universe", default="all_a_share")
@@ -231,9 +267,12 @@ def materialize_factors_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
-        factors = selected_factors(args.factor_set)
+        factors, factor_ids_hash = _filter_factor_ids(
+            selected_factors(args.factor_set), args.factor_ids_file
+        )
         config = {
             "factor_set": args.factor_set,
+            "factor_ids_hash": factor_ids_hash,
             "universe": args.universe,
             "start_date": args.start_date.isoformat(),
             "end_date": args.end_date.isoformat(),
@@ -288,6 +327,11 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report-dir", type=Path, default=Path("reports/factors"))
     parser.add_argument("--data-release-id", type=_release, required=True)
     parser.add_argument("--factor-set", default="baseline_v1")
+    parser.add_argument(
+        "--factor-ids-file",
+        type=Path,
+        help="optional JSON list or nested L2 pool artifact containing union_factor_ids",
+    )
     parser.add_argument("--universe", default="all_a_share")
     parser.add_argument("--start-date", type=parse_date, required=True)
     parser.add_argument("--end-date", type=parse_date, required=True)
@@ -313,7 +357,9 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
-        factors = selected_factors(args.factor_set)
+        factors, factor_ids_hash = _filter_factor_ids(
+            selected_factors(args.factor_set), args.factor_ids_file
+        )
         horizons = tuple(int(item) for item in args.horizons.split(","))
         if (
             not horizons
@@ -348,6 +394,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
         primary = 5 if 5 in horizons else horizons[0]
         evaluation_config = {
             "factor_set": args.factor_set,
+            "factor_ids_hash": factor_ids_hash,
             "universe": args.universe,
             "start_date": args.start_date.isoformat(),
             "end_date": args.end_date.isoformat(),

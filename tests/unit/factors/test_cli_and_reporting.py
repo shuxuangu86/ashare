@@ -105,6 +105,36 @@ def test_industry_neutral_evaluation_requires_attested_pit_release(tmp_path: Pat
         )
 
 
+def test_evaluation_cli_accepts_nested_pool_factor_subset(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pool = tmp_path / "nested-pool.json"
+    pool.write_text(json.dumps({"union_factor_ids": ["momentum_20d", "reversal_5d"]}))
+
+    assert (
+        evaluate_factors_main(
+            [
+                "--release-dir",
+                str(tmp_path),
+                "--data-release-id",
+                RELEASE,
+                "--factor-set",
+                "l2_v2_executable",
+                "--factor-ids-file",
+                str(pool),
+                "--start-date",
+                "20260101",
+                "--end-date",
+                "20260131",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    output = json.loads(capsys.readouterr().out)
+    assert output == {"factor_count": 2, "horizons": [1, 5, 10, 20, 40], "status": "DRY_RUN"}
+
+
 def test_train_cli_uses_purged_walk_forward_and_writes_predictions(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
