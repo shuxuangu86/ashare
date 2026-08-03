@@ -18,7 +18,10 @@ mkdir -p artifacts/logs artifacts/l3_nested_walk_forward \
 
 json_value() {
   .venv/bin/python -c \
-    'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2], ""))' "$1" "$2"
+    'import json,sys; value=json.load(open(sys.argv[1]));
+for key in sys.argv[2].split("."):
+    value=value.get(key, "") if isinstance(value, dict) else ""
+print(value)' "$1" "$2"
 }
 
 if [[ "${1:-}" == "--l3-worker" ]]; then
@@ -32,7 +35,8 @@ if [[ "${1:-}" == "--l3-worker" ]]; then
     --horizon 5 \
     --inner-validation-dates 252 \
     --inner-purge-dates 6 \
-    --maximum-training-rows 200000
+    --maximum-training-rows 200000 \
+    --code-version "$(git rev-parse HEAD)"
   printf '%s\tPASS\n' "$(date --iso-8601=seconds)" >artifacts/logs/nested-l3.status
   exit 0
 fi
@@ -45,7 +49,8 @@ if [[ "${1:-}" == "--l4-worker" ]]; then
     --cache-dir "${union_cache}" \
     --l3-scores "${l3_scores}" \
     --l3-metadata "${l3_metadata}" \
-    --output-dir "${l4_output}"
+    --output-dir "${l4_output}" \
+    --code-version "$(git rev-parse HEAD)"
   printf '%s\tPASS\n' "$(date --iso-8601=seconds)" >artifacts/logs/nested-l4.status
   exit 0
 fi
@@ -55,6 +60,13 @@ if [[ ! -f "${pre_manifest}" ]] || [[ "$(json_value "${pre_manifest}" status)" !
   echo "WAIT_PREHISTORY"
   exit 0
 fi
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "WAIT_TRACKED_WORKTREE_CLEAN"
+  exit 0
+fi
+
+code_version="$(git rev-parse HEAD)"
 
 if [[ ! -f "${pool}" ]]; then
   .venv/bin/python scripts/build_nested_wf_l2_pools.py \
@@ -77,7 +89,9 @@ if [[ ! -f "${union_metadata}" ]] || [[ "$(json_value "${union_metadata}" status
   exit 0
 fi
 
-if [[ ! -f "${l3_metadata}" ]] || [[ "$(json_value "${l3_metadata}" status)" != "PASS" ]]; then
+if [[ ! -f "${l3_metadata}" ]] \
+  || [[ "$(json_value "${l3_metadata}" status)" != "PASS" ]] \
+  || [[ "$(json_value "${l3_metadata}" provenance.code_version)" != "${code_version}" ]]; then
   if [[ -f artifacts/logs/nested-l3.pid ]] \
     && kill -0 "$(cat artifacts/logs/nested-l3.pid)" 2>/dev/null; then
     echo "WAIT_L3"
@@ -91,7 +105,9 @@ if [[ ! -f "${l3_metadata}" ]] || [[ "$(json_value "${l3_metadata}" status)" != 
 fi
 
 l4_report="${l4_output}/nested_l4_backtest.json"
-if [[ ! -f "${l4_report}" ]] || [[ "$(json_value "${l4_report}" status)" != "PASS_RESEARCH_ONLY" ]]; then
+if [[ ! -f "${l4_report}" ]] \
+  || [[ "$(json_value "${l4_report}" status)" != "PASS_RESEARCH_ONLY" ]] \
+  || [[ "$(json_value "${l4_report}" code_version)" != "${code_version}" ]]; then
   if [[ -f artifacts/logs/nested-l4.pid ]] \
     && kill -0 "$(cat artifacts/logs/nested-l4.pid)" 2>/dev/null; then
     echo "WAIT_L4"

@@ -19,6 +19,7 @@ def main() -> None:
     parser.add_argument("--inner-validation-dates", type=int, default=252)
     parser.add_argument("--inner-purge-dates", type=int, default=6)
     parser.add_argument("--maximum-training-rows", type=int, default=200_000)
+    parser.add_argument("--code-version", required=True)
     args = parser.parse_args()
     cache = ConvergenceCache(args.cache_dir)
     metadata = json.loads(cache.metadata_path.read_text())
@@ -41,6 +42,7 @@ def main() -> None:
             "data_release_id": cache.data_release_id,
             "cache_config_hash": cache.config_hash,
             "cache_content_hash": metadata["content_hash"],
+            "code_version": args.code_version,
         },
     )
     print(

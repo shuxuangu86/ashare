@@ -119,6 +119,7 @@ def main() -> None:
         "l3_content_hash": expected_l3_hash,
         "cache_content_hash": cache["content_hash"],
         "history_release_id": release_id,
+        "code_version": args.code_version,
         "benchmark": proxy_metadata,
         "outer_test_used_for_optimization": False,
         "fold_configurations": [
@@ -167,6 +168,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--l3-scores", type=Path, required=True)
     parser.add_argument("--l3-metadata", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--code-version", required=True)
     return parser.parse_args()
 
 
@@ -308,6 +310,7 @@ def _markdown(payload: dict[str, Any]) -> str:
 - Status: `{payload["status"]}`
 - Period: {payload["start_date"]} to {payload["end_date"]}
 - Initial equity: CNY {payload["initial_equity"]}
+- Code version: `{payload["code_version"]}`
 - Annual return: {performance["annual_return"]:.2%}
 - Proxy annual return: {performance["annual_benchmark_return"]:.2%}
 - Annual excess return: {performance["annual_excess_return"]:.2%}
