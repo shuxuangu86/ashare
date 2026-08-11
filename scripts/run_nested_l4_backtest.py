@@ -21,6 +21,7 @@ from aquant.strategies import (
     SingleFactorConfig,
     SingleFactorEqualWeightStrategy,
     SingleFactorObservation,
+    SingleFactorSelector,
     SingleFactorSnapshot,
     generate_rebalance_dates,
     matcher_for_cost_scenario,
@@ -69,24 +70,39 @@ def main() -> None:
     date_index = {value: index for index, value in enumerate(dates)}
     code_index = {value: index for index, value in enumerate(codes)}
 
+    expected_session_dates = tuple(value for value in dates if start_date <= value <= end_date)
     with DuckDBMicrocapHistory(args.history_release) as history:
-        sessions = history.sessions(start_date, end_date)
-        session_dates = tuple(session.trade_date for session in sessions)
+        session_dates = history.trading_dates(start_date, end_date)
+        if session_dates != expected_session_dates:
+            raise ValueError("history sessions and L3 trading dates differ")
         rebalance_configs = _rebalance_configs(l3, session_dates)
-        # Full-universe PIT snapshots are only needed when the selector runs.
-        # Keeping one for every session duplicates several years of market state
-        # and can exceed the bounded-memory research runtime.
-        risk_snapshots = history.snapshots(tuple(sorted(rebalance_configs)))
+        # Build one PIT selection snapshot at a time. Only securities that can
+        # actually be held need full event-engine bars, which avoids loading a
+        # five-year all-market session cube into memory.
+        snapshots: dict[date, SingleFactorSnapshot] = {}
+        selected_codes: set[str] = set()
+        for trade_date, config in rebalance_configs.items():
+            risk = history.snapshot(trade_date)
+            snapshot = _snapshots(
+                trading_dates=(trade_date,),
+                risk_snapshots={trade_date: risk},
+                scores=scores,
+                date_index=date_index,
+                code_index=code_index,
+            )[trade_date]
+            snapshots[trade_date] = snapshot
+            selected_codes.update(
+                symbol.canonical.replace(".XSHG", ".SH").replace(".XSHE", ".SZ")
+                for symbol in SingleFactorSelector(config).select(snapshot).symbols
+            )
+        sessions = history.sessions(
+            start_date,
+            end_date,
+            ts_codes=tuple(sorted(selected_codes)),
+        )
         release_id = history.release.manifest.release_id
-    if session_dates != tuple(value for value in dates if start_date <= value <= end_date):
+    if tuple(session.trade_date for session in sessions) != expected_session_dates:
         raise ValueError("history sessions and L3 trading dates differ")
-    snapshots = _snapshots(
-        sessions=sessions,
-        risk_snapshots=risk_snapshots,
-        scores=scores,
-        date_index=date_index,
-        code_index=code_index,
-    )
     initial_equity = Decimal("1000000")
     result = EventDrivenBacktest(
         run_id=f"nested-l3-l4-{expected_l3_hash[:12]}",
@@ -240,15 +256,14 @@ def _arguments() -> argparse.Namespace:
 
 def _snapshots(
     *,
-    sessions: tuple[Any, ...],
+    trading_dates: tuple[date, ...],
     risk_snapshots: dict[date, Any],
     scores: np.ndarray[Any, Any],
     date_index: dict[date, int],
     code_index: dict[str, int],
 ) -> dict[date, SingleFactorSnapshot]:
     result: dict[date, SingleFactorSnapshot] = {}
-    for session in sessions:
-        trade_date = session.trade_date
+    for trade_date in trading_dates:
         risk = risk_snapshots.get(trade_date)
         if risk is None:
             continue

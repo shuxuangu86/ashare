@@ -113,10 +113,6 @@ def test_l4_snapshots_only_require_full_universe_on_rebalance_dates() -> None:
     first = date(2021, 1, 4)
     second = date(2021, 1, 5)
     close_at = datetime(2021, 1, 4, 15, tzinfo=UTC)
-    sessions = (
-        SimpleNamespace(trade_date=first, close_at=close_at),
-        SimpleNamespace(trade_date=second, close_at=close_at + timedelta(days=1)),
-    )
     symbol = Symbol.parse("600001.XSHG")
     observation = SimpleNamespace(
         symbol=symbol,
@@ -126,7 +122,7 @@ def test_l4_snapshots_only_require_full_universe_on_rebalance_dates() -> None:
         is_delisting_risk=False,
     )
     snapshots = _snapshots(
-        sessions=sessions,
+        trading_dates=(first, second),
         risk_snapshots={first: SimpleNamespace(asof_time=close_at, observations=(observation,))},
         scores=np.zeros((2, 1)),
         date_index={first: 0, second: 1},
