@@ -101,6 +101,7 @@ def run_nested_l3(
             fold_results.append(result)
         score_map.flush()
         temporary = Path(score_map.filename)
+        score_map._mmap.close()
         output_scores.parent.mkdir(parents=True, exist_ok=True)
         os.replace(temporary, output_scores)
     except BaseException:
