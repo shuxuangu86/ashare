@@ -227,7 +227,8 @@ class SingleFactorEqualWeightStrategy:
             symbol: self._round_lot(per_security / bars[symbol].close, config.lot_size)
             for symbol in selection.symbols
         }
-        if any(quantity <= 0 for quantity in target.values()):
+        target = {symbol: quantity for symbol, quantity in target.items() if quantity > 0}
+        if not target:
             raise ValueError("single-factor capital is insufficient for one board lot per target")
         orders = [
             OrderRequest(symbol, Side.BUY if delta > 0 else Side.SELL, abs(delta))
