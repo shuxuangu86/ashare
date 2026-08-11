@@ -199,16 +199,19 @@ class SingleFactorEqualWeightStrategy:
 
     def on_close(self, context: StrategyContext) -> tuple[OrderRequest, ...]:
         trade_date = context.session.trade_date
-        snapshot = self._snapshot(trade_date, context.session.close_at)
-        self._last_risk_state.update(
-            (observation.symbol, observation) for observation in snapshot.observations
-        )
         current = {position.symbol: position.quantity for position in context.portfolio.positions}
+        if trade_date in self._snapshots:
+            snapshot = self._snapshot(trade_date, context.session.close_at)
+            self._last_risk_state.update(
+                (observation.symbol, observation) for observation in snapshot.observations
+            )
         if trade_date not in self._rebalance_dates:
             return self._hard_exits(
                 current,
                 context.session.status_by_symbol(),
             )
+
+        snapshot = self._snapshot(trade_date, context.session.close_at)
 
         config = self._dated_configs.get(trade_date, self._config)
         if config is None:

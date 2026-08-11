@@ -72,18 +72,21 @@ def main() -> None:
     with DuckDBMicrocapHistory(args.history_release) as history:
         sessions = history.sessions(start_date, end_date)
         session_dates = tuple(session.trade_date for session in sessions)
-        risk_snapshots = history.snapshots(session_dates)
+        rebalance_configs = _rebalance_configs(l3, session_dates)
+        # Full-universe PIT snapshots are only needed when the selector runs.
+        # Keeping one for every session duplicates several years of market state
+        # and can exceed the bounded-memory research runtime.
+        risk_snapshots = history.snapshots(tuple(sorted(rebalance_configs)))
         release_id = history.release.manifest.release_id
     if session_dates != tuple(value for value in dates if start_date <= value <= end_date):
         raise ValueError("history sessions and L3 trading dates differ")
     snapshots = _snapshots(
-        session_dates=session_dates,
+        sessions=sessions,
         risk_snapshots=risk_snapshots,
         scores=scores,
         date_index=date_index,
         code_index=code_index,
     )
-    rebalance_configs = _rebalance_configs(l3, session_dates)
     initial_equity = Decimal("1000000")
     result = EventDrivenBacktest(
         run_id=f"nested-l3-l4-{expected_l3_hash[:12]}",
@@ -237,15 +240,18 @@ def _arguments() -> argparse.Namespace:
 
 def _snapshots(
     *,
-    session_dates: tuple[date, ...],
+    sessions: tuple[Any, ...],
     risk_snapshots: dict[date, Any],
     scores: np.ndarray[Any, Any],
     date_index: dict[date, int],
     code_index: dict[str, int],
 ) -> dict[date, SingleFactorSnapshot]:
     result: dict[date, SingleFactorSnapshot] = {}
-    for trade_date in session_dates:
-        risk = risk_snapshots[trade_date]
+    for session in sessions:
+        trade_date = session.trade_date
+        risk = risk_snapshots.get(trade_date)
+        if risk is None:
+            continue
         row = scores[date_index[trade_date]]
         observations = []
         for item in risk.observations:

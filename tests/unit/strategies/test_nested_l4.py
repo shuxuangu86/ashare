@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -6,8 +7,10 @@ from scripts.run_nested_l4_backtest import (
     _BASE_COST_ASSUMPTIONS,
     _daily_curve_csv,
     _fold_performance,
+    _snapshots,
 )
 
+from aquant.domain.identifiers import Symbol
 from aquant.strategies.microcap.experiments import RebalanceFrequency
 from aquant.strategies.nested_l4 import select_l4_configuration
 
@@ -104,3 +107,31 @@ def test_nested_backtest_discloses_executable_cost_assumptions() -> None:
     assert _BASE_COST_ASSUMPTIONS[
         "maximum_prior_20d_average_volume_participation"
     ] == pytest.approx(0.005)
+
+
+def test_l4_snapshots_only_require_full_universe_on_rebalance_dates() -> None:
+    first = date(2021, 1, 4)
+    second = date(2021, 1, 5)
+    close_at = datetime(2021, 1, 4, 15, tzinfo=UTC)
+    sessions = (
+        SimpleNamespace(trade_date=first, close_at=close_at),
+        SimpleNamespace(trade_date=second, close_at=close_at + timedelta(days=1)),
+    )
+    symbol = Symbol.parse("600001.XSHG")
+    observation = SimpleNamespace(
+        symbol=symbol,
+        list_date=date(2020, 1, 1),
+        suspended=False,
+        is_st=False,
+        is_delisting_risk=False,
+    )
+    snapshots = _snapshots(
+        sessions=sessions,
+        risk_snapshots={first: SimpleNamespace(asof_time=close_at, observations=(observation,))},
+        scores=np.zeros((2, 1)),
+        date_index={first: 0, second: 1},
+        code_index={"600001.SH": 0},
+    )
+
+    assert tuple(snapshots) == (first,)
+    assert len(snapshots[first].observations) == 1
