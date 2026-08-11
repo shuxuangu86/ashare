@@ -198,6 +198,7 @@ class DuckDBMicrocapHistory:
             LEFT JOIN historical_name USING (ts_code)
             LEFT JOIN latest_financial AS financial USING (ts_code)
             LEFT JOIN suspended USING (ts_code)
+            WHERE instrument.list_date <= basic.trade_date
             ORDER BY basic.ts_code
             """,
             [
