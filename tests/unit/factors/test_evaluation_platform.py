@@ -42,6 +42,20 @@ def test_ic_rank_ic_and_forward_labels() -> None:
     assert np.isnan(labels[-1]).all()
 
 
+def test_rank_ic_uses_average_tie_ranks_and_is_permutation_invariant() -> None:
+    factor = np.asarray([[1.0, 1.0, 2.0, 2.0]])
+    returns = np.asarray([[1.0, 2.0, 3.0, 4.0]])
+    permutation = np.asarray([3, 0, 2, 1])
+
+    original = information_coefficient(factor, returns, rank=True)
+    permuted = information_coefficient(factor[:, permutation], returns[:, permutation], rank=True)
+    constant = information_coefficient(np.ones((1, 4)), returns, rank=True)
+
+    assert original.mean == pytest.approx(0.8944271909999159)
+    assert permuted.mean == pytest.approx(original.mean)
+    assert np.isnan(constant.mean)
+
+
 def test_forward_labels_do_not_enter_factor_history() -> None:
     close = np.arange(1.0, 21.0)[:, None]
     changed = close.copy()

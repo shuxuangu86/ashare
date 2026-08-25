@@ -3,6 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
+from aquant.factors.operators.cross_sectional import cs_rank
+
 
 @dataclass(frozen=True, slots=True)
 class ICStatistics:
@@ -15,10 +17,7 @@ class ICStatistics:
 
 
 def _rank(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    order = np.argsort(values, kind="stable")
-    ranks = np.empty(len(values), dtype=np.float64)
-    ranks[order] = np.arange(len(values))
-    return ranks
+    return np.asarray(cs_rank(values), dtype=np.float64)
 
 
 def information_coefficient(

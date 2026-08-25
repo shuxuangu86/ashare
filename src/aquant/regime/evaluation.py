@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
+from aquant.factors.operators.cross_sectional import cs_rank
+
 
 @dataclass(frozen=True, slots=True)
 class StateForwardEvaluation:
@@ -120,10 +122,7 @@ def correlation_matrix(
 
 
 def _rank(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    order = np.argsort(values, kind="stable")
-    ranks = np.empty(len(values), dtype=np.float64)
-    ranks[order] = np.arange(len(values), dtype=np.float64)
-    return ranks
+    return np.asarray(cs_rank(values), dtype=np.float64)
 
 
 def _mean_or_none(values: npt.NDArray[np.float64]) -> float | None:

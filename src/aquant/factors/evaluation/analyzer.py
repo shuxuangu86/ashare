@@ -3,6 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
+from aquant.factors.operators.cross_sectional import cs_rank
+
 Array = npt.NDArray[np.float64]
 
 
@@ -111,10 +113,7 @@ class FactorAnalyzer:
 
     @staticmethod
     def _rank(values: Array) -> Array:
-        order = np.argsort(values, kind="stable")
-        ranks = np.empty(values.size, dtype=np.float64)
-        ranks[order] = np.arange(values.size, dtype=np.float64)
-        return ranks
+        return np.asarray(cs_rank(values), dtype=np.float64)
 
     @staticmethod
     def _correlation(left: Array, right: Array) -> float:
