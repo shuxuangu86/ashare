@@ -113,7 +113,9 @@ class FactorAnalyzer:
 
     @staticmethod
     def _rank(values: Array) -> Array:
-        return np.asarray(cs_rank(values), dtype=np.float64)
+        # Quantile assignment below expects zero-based ranks. Subtracting one
+        # preserves average ranks for ties without shifting group boundaries.
+        return np.asarray(cs_rank(values), dtype=np.float64) - 1.0
 
     @staticmethod
     def _correlation(left: Array, right: Array) -> float:

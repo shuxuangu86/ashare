@@ -63,9 +63,7 @@ def main() -> None:
         valid = np.isfinite(expected_close)
         if np.count_nonzero(valid) == 0:
             raise ValueError("adjusted market matrices contain no observations")
-        if not np.allclose(
-            expected_close[valid], adjusted_close[valid], rtol=1e-5, atol=1e-3
-        ):
+        if not np.allclose(expected_close[valid], adjusted_close[valid], rtol=1e-5, atol=1e-3):
             raise ValueError("adjusted close does not reconcile with cache close")
         for array in (adjusted_close, adjusted_open, adjustment_factor):
             array.flush()
