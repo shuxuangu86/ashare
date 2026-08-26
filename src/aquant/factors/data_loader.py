@@ -26,7 +26,21 @@ _FIELD_SOURCE = {
     "debt_to_assets": "financial",
     "up_limit": "limits",
     "down_limit": "limits",
+    "adj_factor": "adjustment",
 }
+
+_ADJUSTED_PRICE_FIELDS = frozenset({"open", "high", "low", "close", "up_limit", "down_limit"})
+
+
+def _selection(field: str) -> str:
+    source = _FIELD_SOURCE[field]
+    if field in _ADJUSTED_PRICE_FIELDS:
+        return (
+            f"CAST({source}.{field} AS DOUBLE) * CAST(adjustment.adj_factor AS DOUBLE) AS {field}"
+        )
+    if field == "adj_factor":
+        return "CAST(adjustment.adj_factor AS DOUBLE) AS adj_factor"
+    return f"{source}.{field} AS {field}"
 
 
 class StandardPITFactorLoader:
@@ -59,7 +73,11 @@ class StandardPITFactorLoader:
         universe_id: str,
         data_release_id: DataReleaseId,
     ) -> FactorPanelInput:
-        del data_release_id
+        expected_release = self.release.manifest.release_id.replace(
+            "cn_equity_history_", "cn_equity_"
+        )
+        if str(data_release_id) != expected_release:
+            raise ValueError("requested data release does not match Standard/PIT history release")
         if start_date > end_date or end_date > as_of_time.date():
             raise ValueError("factor load range must be ordered and visible as-of")
         if universe_id != "all_a_share":
@@ -68,22 +86,38 @@ class StandardPITFactorLoader:
         if unknown:
             raise ValueError(f"unsupported Standard/PIT fields: {sorted(unknown)}")
         required = {"daily"} | {
-            {"basic": "daily_basic", "financial": "fina_indicator", "limits": "stk_limit"}[source]
+            {
+                "basic": "daily_basic",
+                "financial": "fina_indicator",
+                "limits": "stk_limit",
+                "adjustment": "adj_factor",
+            }[source]
             for source in {_FIELD_SOURCE[field] for field in fields}
             if source != "daily"
         }
+        if _ADJUSTED_PRICE_FIELDS.intersection(fields):
+            required.add("adj_factor")
         self.release.require(*sorted(required))
+        self.release.verify(*sorted(required))
         sources = {_FIELD_SOURCE[field] for field in fields}
         query_fields = tuple(field for field in fields if _FIELD_SOURCE[field] != "financial")
-        selections = ", ".join(
-            f"{_FIELD_SOURCE[field]}.{field} AS {field}" for field in query_fields
-        )
+        selections = ", ".join(_selection(field) for field in query_fields)
         joins: list[str] = []
         parameters: list[object] = [
             self.release.parquet_pattern("daily"),
             start_date,
             end_date,
         ]
+        if "adj_factor" in required:
+            joins.append(
+                """
+                LEFT JOIN read_parquet(?) AS adjustment
+                  ON adjustment.trade_date = daily.trade_date
+                 AND adjustment.ts_code = daily.ts_code
+                 AND adjustment.trade_date BETWEEN ? AND ?
+                """
+            )
+            parameters.extend([self.release.parquet_pattern("adj_factor"), start_date, end_date])
         if "basic" in sources:
             joins.append(
                 """
@@ -148,6 +182,32 @@ class StandardPITFactorLoader:
             )
             if not trade_dates or not ts_codes:
                 raise ValueError("Standard/PIT release has no rows in requested range")
+            if _ADJUSTED_PRICE_FIELDS.intersection(fields):
+                adjustment_count_row = connection.execute(
+                    """
+                    SELECT count(*)
+                    FROM read_parquet(?) AS daily
+                    LEFT JOIN read_parquet(?) AS adjustment
+                      ON adjustment.trade_date = daily.trade_date
+                     AND adjustment.ts_code = daily.ts_code
+                    WHERE daily.trade_date BETWEEN ? AND ?
+                      AND daily.exchange IN ('XSHG', 'XSHE')
+                      AND adjustment.adj_factor IS NULL
+                    """,
+                    [
+                        daily_pattern,
+                        self.release.parquet_pattern("adj_factor"),
+                        start_date,
+                        end_date,
+                    ],
+                ).fetchone()
+                if adjustment_count_row is None:
+                    raise ValueError("adjustment coverage query returned no result")
+                missing_adjustments = int(adjustment_count_row[0])
+                if missing_adjustments:
+                    raise ValueError(
+                        f"adjustment factor is missing for {missing_adjustments} daily rows"
+                    )
             date_index = {value: index for index, value in enumerate(trade_dates)}
             code_index = {value: index for index, value in enumerate(ts_codes)}
             arrays: dict[str, npt.NDArray[np.float64]] = {

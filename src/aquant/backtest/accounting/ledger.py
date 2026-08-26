@@ -38,6 +38,20 @@ class PortfolioSnapshot:
     receivables: Decimal = Decimal("0")
 
 
+@dataclass(frozen=True, slots=True)
+class PortfolioLedgerState:
+    initial_cash: Decimal
+    cash: Decimal
+    realized_pnl: Decimal
+    receivables: Decimal
+    dividend_receivables: tuple[tuple[UUID, Decimal], ...]
+    positions: tuple[Position, ...]
+    fill_ids: tuple[UUID, ...]
+    action_ids: tuple[UUID, ...]
+    last_fill_at: datetime | None
+    last_event_at: datetime | None
+
+
 class PortfolioLedger:
     """Fill-sourced accounting ledger; all state can be replayed from immutable fills."""
 
@@ -206,6 +220,35 @@ class PortfolioLedger:
                 ledger.apply_corporate_action(event)
         return ledger
 
+    @classmethod
+    def from_state(cls, state: PortfolioLedgerState) -> "PortfolioLedger":
+        ledger = cls(state.initial_cash)
+        ledger._cash = Decimal(state.cash)
+        ledger._realized_pnl = Decimal(state.realized_pnl)
+        ledger._receivables = Decimal(state.receivables)
+        ledger._dividend_receivables = dict(state.dividend_receivables)
+        ledger._positions = {position.symbol: position for position in state.positions}
+        ledger._fill_ids = set(state.fill_ids)
+        ledger._action_ids = set(state.action_ids)
+        ledger._last_fill_at = state.last_fill_at
+        ledger._last_event_at = state.last_event_at
+        return ledger
+
+    @property
+    def export_state(self) -> PortfolioLedgerState:
+        return PortfolioLedgerState(
+            initial_cash=self._initial_cash,
+            cash=self._cash,
+            realized_pnl=self._realized_pnl,
+            receivables=self._receivables,
+            dividend_receivables=tuple(sorted(self._dividend_receivables.items(), key=str)),
+            positions=tuple(sorted(self._positions.values(), key=lambda item: item.symbol)),
+            fill_ids=tuple(sorted(self._fill_ids, key=str)),
+            action_ids=tuple(sorted(self._action_ids, key=str)),
+            last_fill_at=self._last_fill_at,
+            last_event_at=self._last_event_at,
+        )
+
     @property
     def cash(self) -> Decimal:
         return self._cash
@@ -258,6 +301,15 @@ class PortfolioLedger:
             "initial_cash": str(self._initial_cash),
             "realized_pnl": str(self._realized_pnl),
             "receivables": str(self._receivables),
+            "positions": [
+                {
+                    "average_cost": str(position.average_cost),
+                    "quantity": position.quantity,
+                    "symbol": position.symbol.canonical,
+                }
+                for position in sorted(self._positions.values(), key=lambda item: item.symbol)
+                if position.quantity
+            ],
         }
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode()).hexdigest()

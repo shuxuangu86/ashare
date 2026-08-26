@@ -50,6 +50,10 @@ def run_nested_l3(
         ModelKind.ELASTIC_NET,
     ),
     complexity_penalty: float = 0.001,
+    neutralization: str = "SIZE_NEUTRAL",
+    benchmark_returns: npt.ArrayLike | None = None,
+    eligibility_mask: npt.ArrayLike | None = None,
+    open_prices: npt.ArrayLike | None = None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Train family L3 models inside each outer fold and emit untouched outer predictions."""
@@ -59,6 +63,17 @@ def run_nested_l3(
         raise ValueError("factor values must be factor-by-date-by-security and align with close")
     if values.shape[0] != len(factor_ids) or prices.shape[0] != len(trade_dates):
         raise ValueError("factor ids and trade dates must align with values")
+    benchmark = (
+        None if benchmark_returns is None else np.asarray(benchmark_returns, dtype=np.float64)
+    )
+    eligibility = None if eligibility_mask is None else np.asarray(eligibility_mask, dtype=bool)
+    opening = None if open_prices is None else np.asarray(open_prices, dtype=np.float64)
+    if benchmark is not None and benchmark.shape != (len(prices),):
+        raise ValueError("nested L3 benchmark returns must align with dates")
+    if eligibility is not None and eligibility.shape != prices.shape:
+        raise ValueError("nested L3 eligibility mask must align with close")
+    if opening is not None and opening.shape != prices.shape:
+        raise ValueError("nested L3 open prices must align with close")
     if tuple(sorted(set(trade_dates))) != trade_dates:
         raise ValueError("trade dates must be unique and ordered")
     if horizon <= 0 or inner_purge_dates <= horizon:
@@ -94,6 +109,9 @@ def run_nested_l3(
                 maximum_training_rows=maximum_training_rows,
                 methods=methods,
                 complexity_penalty=complexity_penalty,
+                benchmark_returns=benchmark,
+                eligibility_mask=eligibility,
+                open_prices=opening,
             )
             start = date_index[date.fromisoformat(fold["test_start"])]
             end = date_index[date.fromisoformat(fold["test_end"])] + 1
@@ -112,7 +130,7 @@ def run_nested_l3(
         "status": "PASS",
         "research_status": "RESEARCH_ONLY",
         "stage": "NESTED_WALK_FORWARD_L3",
-        "neutralization": "SIZE_NEUTRAL",
+        "neutralization": neutralization,
         "horizon": horizon,
         "inner_validation_dates": inner_validation_dates,
         "inner_purge_dates": inner_purge_dates,
@@ -122,6 +140,21 @@ def run_nested_l3(
         "outer_test_used_for_model_selection": False,
         "preprocessing": "DAILY_CROSS_SECTIONAL_PERCENTILE_ZSCORE; missing_to_zero_after_fit",
         "cross_family_aggregation": "EQUAL_WEIGHT_DAILY_ZSCORE",
+        "inner_l4_benchmark": (
+            "PIT_ALL_A_SHARE_DAILY_EQUAL_PROXY"
+            if benchmark is not None
+            else "AVAILABLE_SECURITY_DAILY_EQUAL_CLOSE_RETURN_PROXY"
+        ),
+        "inner_l4_eligibility": (
+            "PIT_LISTED_120D_NON_ST_NON_DELISTING_RISK"
+            if eligibility is not None
+            else "FINITE_SCORE_AND_CLOSE_ONLY"
+        ),
+        "inner_l4_execution": (
+            "T_CLOSE_SIGNAL_T_PLUS_1_OPEN_WEIGHT_TRANSITION"
+            if opening is not None
+            else "DELAYED_CLOSE_PROXY"
+        ),
         "fold_pool_hash": fold_pools["content_hash"],
         "score_file": str(output_scores),
         "score_file_hash": _file_hash(output_scores),
@@ -157,6 +190,9 @@ def _train_fold(
     maximum_training_rows: int,
     methods: tuple[ModelKind, ...],
     complexity_penalty: float,
+    benchmark_returns: FloatArray | None,
+    eligibility_mask: npt.NDArray[np.bool_] | None,
+    open_prices: FloatArray | None,
 ) -> dict[str, Any]:
     train_end = date_index[date.fromisoformat(fold["train_end_after_purge"])]
     test_start = date_index[date.fromisoformat(fold["test_start"])]
@@ -263,6 +299,9 @@ def _train_fold(
         close=close,
         trade_dates=trade_dates,
         validation_positions=inner_validation,
+        benchmark_returns=benchmark_returns,
+        eligibility_mask=eligibility_mask,
+        open_prices=open_prices,
     )
     return {
         "fold": int(fold["fold"]),
@@ -300,14 +339,44 @@ def _model_rows(
     maximum_rows: int,
 ) -> tuple[FloatArray, FloatArray]:
     security_count = values.shape[2]
-    step = max(1, int(np.ceil(len(positions) * security_count / maximum_rows)))
-    security_positions = np.arange(0, security_count, step, dtype=np.int64)
-    features = values[:, positions][:, :, security_positions].transpose(1, 2, 0)
-    target = cs_percentile(labels[positions][:, security_positions]) - 0.5
-    rows = features.reshape(-1, values.shape[0])
-    y = target.reshape(-1)
-    valid = np.isfinite(y) & np.any(np.isfinite(rows), axis=1)
-    return np.nan_to_num(rows[valid]), y[valid]
+    target = cs_percentile(labels[positions]) - 0.5
+    valid = np.isfinite(target)
+    has_feature = np.zeros(target.shape, dtype=np.bool_)
+    for factor in values:
+        has_feature |= np.isfinite(factor[positions])
+    eligible = valid & has_feature
+    candidates = np.flatnonzero(eligible)
+    if len(candidates) > maximum_rows:
+        # Deterministically stratify by date, then sample securities inside each
+        # cross-section. This avoids a permanent code slice and date imbalance.
+        seed = np.random.SeedSequence(
+            [int(positions[0]), int(positions[-1]), len(positions), security_count]
+        )
+        generator = np.random.default_rng(seed)
+        base, remainder = divmod(maximum_rows, len(positions))
+        quotas = np.full(len(positions), base, dtype=np.int64)
+        if base:
+            quotas[:remainder] += 1
+        else:
+            chosen_dates = generator.choice(len(positions), size=maximum_rows, replace=False)
+            quotas[chosen_dates] = 1
+        sampled: list[npt.NDArray[np.int64]] = []
+        for date_offset in range(len(positions)):
+            securities = np.flatnonzero(eligible[date_offset])
+            quota = int(quotas[date_offset])
+            if quota <= 0 or not len(securities):
+                continue
+            selected = (
+                securities
+                if len(securities) <= quota
+                else np.sort(generator.choice(securities, size=quota, replace=False))
+            )
+            sampled.append(date_offset * security_count + selected)
+        candidates = np.concatenate(sampled) if sampled else np.empty(0, dtype=np.int64)
+    date_offsets, security_positions = np.divmod(candidates, security_count)
+    rows = values[:, positions[date_offsets], security_positions].T
+    y = target[date_offsets, security_positions]
+    return np.nan_to_num(rows), y
 
 
 def _historical_evidence(

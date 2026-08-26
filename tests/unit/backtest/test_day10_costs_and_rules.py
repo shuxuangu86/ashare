@@ -108,6 +108,24 @@ def test_rule_aware_matcher_applies_lot_volume_slippage_and_fees() -> None:
 
 
 @pytest.mark.parametrize(
+    ("side", "expected"),
+    [(Side.BUY, Decimal("10.5")), (Side.SELL, Decimal("9.5"))],
+)
+def test_slippage_price_is_clamped_to_observed_ohlc(side: Side, expected: Decimal) -> None:
+    matcher = AshareOpenMatcher(rules=AshareExecutionRules(slippage_bps=Decimal("1000")))
+    fill = matcher.match(
+        _order(side=side),
+        _bar(),
+        occurred_at=OPENED,
+        fill_id=UUID(int=22 if side is Side.BUY else 23),
+        available_cash=Decimal("100000"),
+        status=_status(),
+    )
+    assert fill is not None
+    assert fill.price == expected
+
+
+@pytest.mark.parametrize(
     ("side", "status"),
     [
         (Side.BUY, _status(suspended=True)),

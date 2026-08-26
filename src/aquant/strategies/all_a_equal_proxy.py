@@ -25,7 +25,7 @@ def build_all_a_equal_weight_proxy(
     if start_date >= end_date:
         raise ValueError("equal-weight proxy dates must be ordered")
     release = HistoryReleaseReader(release_directory)
-    release.require("daily", "adj_factor", "stock_basic")
+    release.verify("daily", "adj_factor", "stock_basic")
     connection = duckdb.connect(":memory:")
     try:
         rows = connection.execute(

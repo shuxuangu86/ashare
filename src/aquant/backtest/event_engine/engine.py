@@ -8,7 +8,11 @@ from itertools import pairwise
 from typing import Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from aquant.backtest.accounting import PortfolioLedger, PortfolioSnapshot
+from aquant.backtest.accounting import (
+    PortfolioLedger,
+    PortfolioLedgerState,
+    PortfolioSnapshot,
+)
 from aquant.backtest.event_engine.events import (
     BacktestEvent,
     CorporateActionAppliedEvent,
@@ -19,6 +23,7 @@ from aquant.backtest.event_engine.events import (
 from aquant.backtest.event_engine.queue import EventQueue
 from aquant.backtest.matching import (
     BacktestOrder,
+    BacktestOrderStatus,
     Fill,
     FillEvent,
     NextOpenMatcher,
@@ -88,6 +93,13 @@ class UnfilledOrderPolicy(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class BacktestCheckpoint:
+    ledger_state: PortfolioLedgerState
+    last_prices: tuple[tuple[Symbol, Decimal], ...]
+    open_orders: tuple[BacktestOrder, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class BacktestResult:
     run_id: str
     events: tuple[BacktestEvent, ...]
@@ -96,6 +108,7 @@ class BacktestResult:
     equity_curve: tuple[PortfolioSnapshot, ...]
     final_state_hash: str
     corporate_actions: tuple[CorporateAction, ...] = ()
+    checkpoint: BacktestCheckpoint | None = None
 
 
 SessionEvent = SessionOpenEvent | SessionCloseEvent
@@ -135,6 +148,8 @@ class EventDrivenBacktest:
         self,
         sessions: tuple[MarketSession, ...],
         strategy: EventDrivenStrategy,
+        *,
+        checkpoint: BacktestCheckpoint | None = None,
     ) -> BacktestResult:
         self._validate_sessions(sessions)
         queue: EventQueue[SessionEvent] = EventQueue()
@@ -152,12 +167,19 @@ class EventDrivenBacktest:
             )
 
         order_book = OrderBook()
-        ledger = PortfolioLedger(self._initial_cash)
+        if checkpoint is not None:
+            for order in checkpoint.open_orders:
+                order_book.submit(order)
+        ledger = (
+            PortfolioLedger(self._initial_cash)
+            if checkpoint is None
+            else PortfolioLedger.from_state(checkpoint.ledger_state)
+        )
         events: list[BacktestEvent] = []
         equity_curve: list[PortfolioSnapshot] = []
         order_sequence = 0
         fill_sequence = 0
-        last_prices: dict[Symbol, Decimal] = {}
+        last_prices = {} if checkpoint is None else dict(checkpoint.last_prices)
 
         while queue:
             scheduled = queue.pop()
@@ -222,6 +244,15 @@ class EventDrivenBacktest:
                 events.append(OrderSubmittedEvent(order))
 
         final_hash = self._result_hash(order_book.orders, ledger, equity_curve)
+        final_checkpoint = BacktestCheckpoint(
+            ledger.export_state,
+            tuple(sorted(last_prices.items(), key=lambda item: item[0])),
+            tuple(
+                order
+                for order in order_book.orders
+                if order.status in {BacktestOrderStatus.OPEN, BacktestOrderStatus.PARTIALLY_FILLED}
+            ),
+        )
         return BacktestResult(
             self._run_id,
             tuple(events),
@@ -230,6 +261,7 @@ class EventDrivenBacktest:
             tuple(equity_curve),
             final_hash,
             ledger.corporate_actions,
+            final_checkpoint,
         )
 
     def _identifier(self, kind: str, sequence: int) -> UUID:

@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ from aquant.strategies.microcap.experiments import (  # type: ignore[import-unty
 
 def main() -> None:
     args = _arguments()
+    _attest_code_version(args.code_version)
     cache = json.loads((args.cache_dir / "metadata.json").read_text())
     l3 = json.loads(args.l3_metadata.read_text())
     dates = tuple(date.fromisoformat(value) for value in cache["trade_dates"])
@@ -102,11 +104,25 @@ def main() -> None:
         "flags_sha256": _file_hash(flags_path),
         "counts_sha256": _text_hash(counts_text),
         "code_version": args.code_version,
+        "generator_file": "scripts/build_nested_root_cause_eligibility.py",
+        "generator_sha256": _file_hash(Path(__file__)),
     }
     stable["content_hash"] = _hash(stable)
     payload = {**stable, "created_at": datetime.now(UTC).isoformat(timespec="seconds")}
     _write_text(args.output_dir / "eligibility_metadata.json", json.dumps(payload, indent=2) + "\n")
     print(json.dumps(payload))
+
+
+def _attest_code_version(declared: str) -> None:
+    root = Path(__file__).resolve().parents[1]
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    dirty = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=root,
+        text=True,
+    ).strip()
+    if declared != head or dirty:
+        raise ValueError("research artifacts require declared HEAD and a clean tracked worktree")
 
 
 def _arguments() -> argparse.Namespace:

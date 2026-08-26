@@ -4,12 +4,14 @@ from aquant.backtest.accounting import (
     CorporateAction,
     CorporateActionKind,
     PortfolioLedger,
+    PortfolioLedgerState,
     PortfolioSnapshot,
     Position,
 )
 from aquant.backtest.costs import AshareFeeModel, AshareFeeSchedule, FeeBreakdown
 from aquant.backtest.event_engine import EventKind
 from aquant.backtest.event_engine.engine import (
+    BacktestCheckpoint,
     BacktestResult,
     EventDrivenBacktest,
     EventDrivenStrategy,
@@ -38,6 +40,7 @@ __all__ = [
     "AshareFeeModel",
     "AshareFeeSchedule",
     "AshareOpenMatcher",
+    "BacktestCheckpoint",
     "BacktestMetrics",
     "BacktestOrder",
     "BacktestOrderStatus",
@@ -53,6 +56,7 @@ __all__ = [
     "NextOpenMatcher",
     "OrderRequest",
     "PortfolioLedger",
+    "PortfolioLedgerState",
     "PortfolioSnapshot",
     "Position",
     "StrategyContext",

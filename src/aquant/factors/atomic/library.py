@@ -451,11 +451,12 @@ def _price_volume_factors() -> tuple[AtomicFactor, ...]:
         _custom(
             "vwap_deviation",
             "price_volume",
-            ("close", "amount", "volume"),
+            ("close", "amount", "volume", "adj_factor"),
             1,
             lambda p: safe_div(
-                _field(p, "close") - safe_div(_field(p, "amount"), _field(p, "volume")),
-                safe_div(_field(p, "amount"), _field(p, "volume")),
+                _field(p, "close")
+                - safe_div(_field(p, "amount"), _field(p, "volume")) * _field(p, "adj_factor"),
+                safe_div(_field(p, "amount"), _field(p, "volume")) * _field(p, "adj_factor"),
             ),
             "Close deviation from daily amount-weighted average price.",
             "Closing pressure relative to VWAP captures late-session demand.",

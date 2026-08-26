@@ -1,3 +1,4 @@
+import hashlib
 from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
@@ -5,6 +6,7 @@ from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
 import duckdb
+import pyarrow.parquet as pq  # type: ignore[import-untyped]
 
 from aquant.backtest import MarketSession
 from aquant.data.daily_update import parse_tushare_symbol
@@ -28,7 +30,10 @@ class HistoryReleaseReader:
         if not manifest_path.is_file():
             raise FileNotFoundError(f"history release manifest not found: {manifest_path}")
         self.manifest = HistoryReleaseManifest.from_json(manifest_path.read_text(encoding="utf-8"))
-        expected = {dataset for dataset, _checksum, _rows in self.manifest.datasets}
+        self._release_entries = {
+            dataset: (checksum, int(rows)) for dataset, checksum, rows in self.manifest.datasets
+        }
+        expected = set(self._release_entries)
         actual = {
             path.name.removeprefix("dataset=")
             for path in self.directory.glob("dataset=*")
@@ -37,6 +42,7 @@ class HistoryReleaseReader:
         if expected != actual:
             raise ValueError("history release dataset directories do not match its manifest")
         self._datasets: dict[str, HistoryDatasetManifest] = {}
+        self._verified: set[str] = set()
         for dataset in expected:
             path = self.directory / f"dataset={dataset}" / "manifest.json"
             parsed = HistoryDatasetManifest.from_json(path.read_text(encoding="utf-8"))
@@ -48,6 +54,30 @@ class HistoryReleaseReader:
         missing = set(datasets) - set(self._datasets)
         if missing:
             raise ValueError(f"history release is missing datasets: {sorted(missing)}")
+
+    def verify(self, *datasets: str) -> None:
+        self.require(*datasets)
+        for dataset in datasets:
+            if dataset in self._verified:
+                continue
+            directory = self.directory / f"dataset={dataset}"
+            manifest_path = directory / "manifest.json"
+            expected_manifest_hash, expected_rows = self._release_entries[dataset]
+            if _file_hash(manifest_path) != expected_manifest_hash:
+                raise ValueError(f"history dataset manifest was modified: {dataset}")
+            manifest = self._datasets[dataset]
+            actual_rows = 0
+            for relative, expected_hash, rows in manifest.files:
+                path = directory / relative
+                if _file_hash(path) != expected_hash:
+                    raise ValueError(f"history Parquet checksum mismatch: {path}")
+                parquet_rows = pq.ParquetFile(path).metadata.num_rows
+                if parquet_rows != rows:
+                    raise ValueError(f"history Parquet row count mismatch: {path}")
+                actual_rows += parquet_rows
+            if actual_rows != manifest.row_count or actual_rows != expected_rows:
+                raise ValueError(f"history dataset row count mismatch: {dataset}")
+            self._verified.add(dataset)
 
     def has_dataset(self, dataset: str) -> bool:
         return dataset in self._datasets
@@ -361,7 +391,10 @@ class DuckDBMicrocapHistory:
                 SecurityStatus(
                     symbol=symbol,
                     trade_date=trade_date,
-                    suspended=False,
+                    # The release currently has day-level suspension events only.
+                    # Blocking the full event day is conservative and avoids
+                    # inventing a 09:30 tradable interval that is not observed.
+                    suspended=bool(row[11]),
                     is_st=_unsafe_historical_name(row[12]) or _is_st(row[12]),
                     limit_status=_limit_status(opening, up_limit, down_limit),
                     prior_20d_average_volume=_optional_decimal(row[8]),
@@ -390,13 +423,13 @@ class DuckDBMicrocapHistory:
         *,
         ts_codes: tuple[str, ...] | None = None,
     ) -> dict[date, tuple[CorporateAction, ...]]:
-        if not self.release.has_dataset("dividend"):
-            return {}
         codes = tuple(sorted(set(ts_codes or ())))
         if ts_codes is not None and not codes:
             raise ValueError("corporate-action symbol filter must not be empty")
-        rows = self._connection.execute(
-            f"""
+        rows = []
+        if self.release.has_dataset("dividend"):
+            rows = self._connection.execute(
+                f"""
             SELECT DISTINCT
                 dividend.ts_code,
                 dividend.stk_div,
@@ -424,17 +457,17 @@ class DuckDBMicrocapHistory:
               {"AND dividend.ts_code = ANY(?)" if codes else ""}
             ORDER BY coalesce(dividend.ex_date, dividend.pay_date), dividend.ts_code
             """,
-            [
-                self.release.parquet_pattern("dividend"),
-                self.release.parquet_pattern("daily"),
-                self.release.parquet_pattern("daily"),
-                start_date,
-                end_date,
-                start_date,
-                end_date,
-                *([codes] if codes else []),
-            ],
-        ).fetchall()
+                [
+                    self.release.parquet_pattern("dividend"),
+                    self.release.parquet_pattern("daily"),
+                    self.release.parquet_pattern("daily"),
+                    start_date,
+                    end_date,
+                    start_date,
+                    end_date,
+                    *([codes] if codes else []),
+                ],
+            ).fetchall()
         grouped: dict[date, list[CorporateAction]] = {}
         for ts_code, stock_ratio, cash_per_share, ex_date, pay_date, cash_reference in rows:
             symbol = parse_tushare_symbol(ts_code)
@@ -480,6 +513,45 @@ class DuckDBMicrocapHistory:
                         reference_action_id=entitlement_id,
                     )
                 )
+        if self.release.has_dataset("stock_basic"):
+            delistings = self._connection.execute(
+                f"""
+                SELECT
+                    stock.ts_code,
+                    stock.delist_date,
+                    first_session.settlement_date
+                FROM read_parquet(?) AS stock
+                JOIN LATERAL (
+                    SELECT min(bar.trade_date) AS settlement_date
+                    FROM read_parquet(?) AS bar
+                    WHERE bar.trade_date >= stock.delist_date
+                ) AS first_session ON true
+                WHERE first_session.settlement_date BETWEEN ? AND ?
+                  {"AND stock.ts_code = ANY(?)" if codes else ""}
+                ORDER BY first_session.settlement_date, stock.ts_code
+                """,
+                [
+                    self.release.parquet_pattern("stock_basic"),
+                    self.release.parquet_pattern("daily"),
+                    start_date,
+                    end_date,
+                    *([codes] if codes else []),
+                ],
+            ).fetchall()
+            for ts_code, delist_date, settlement_date in delistings:
+                if settlement_date is None:
+                    continue
+                grouped.setdefault(settlement_date, []).append(
+                    CorporateAction(
+                        uuid5(NAMESPACE_URL, f"aquant:delisting:{ts_code}:{delist_date}"),
+                        parse_tushare_symbol(ts_code),
+                        CorporateActionKind.DELISTING,
+                        datetime.combine(settlement_date, time(9, 30), _SHANGHAI),
+                        # No exchange settlement/OTC recovery series is present in the
+                        # release. Zero is conservative and prevents stale-price equity.
+                        settlement_price=Decimal("0"),
+                    )
+                )
         return {
             trade_date: tuple(
                 sorted(actions, key=lambda item: (item.occurred_at, str(item.action_id)))
@@ -497,6 +569,14 @@ def _decimal(value: object) -> Decimal:
 
 def _optional_decimal(value: object) -> Decimal | None:
     return None if value is None else _decimal(value)
+
+
+def _file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _unsafe_historical_name(value: object) -> bool:

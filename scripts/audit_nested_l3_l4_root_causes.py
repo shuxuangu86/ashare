@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import math
+import subprocess
 from collections import defaultdict
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -29,6 +30,7 @@ FloatArray = npt.NDArray[np.float64]
 
 def main() -> None:
     args = _arguments()
+    _attest_code_version(args.code_version)
     cache = json.loads((args.cache_dir / "metadata.json").read_text())
     l3 = json.loads(args.l3_metadata.read_text())
     l4 = json.loads(args.l4_report.read_text())
@@ -120,6 +122,8 @@ def main() -> None:
             "l4_content_hash": l4["content_hash"],
             "market_matrix_content_hash": matrix_metadata["content_hash"],
             "code_version": args.code_version,
+            "generator_file": "scripts/audit_nested_l3_l4_root_causes.py",
+            "generator_sha256": _text_hash(Path(__file__).read_text(encoding="utf-8")),
         },
         "limitations": [
             "The outer OOS has already been observed and is used for diagnosis only.",
@@ -136,6 +140,18 @@ def main() -> None:
             {"status": payload["status"], "content_hash": payload["content_hash"], **summary}
         )
     )
+
+
+def _attest_code_version(declared: str) -> None:
+    root = Path(__file__).resolve().parents[1]
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    dirty = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=root,
+        text=True,
+    ).strip()
+    if declared != head or dirty:
+        raise ValueError("research artifacts require declared HEAD and a clean tracked worktree")
 
 
 def _arguments() -> argparse.Namespace:

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 cd /home/gsx1339/aquant
-mkdir -p artifacts/logs reports/l3-nested-prehistory-size-2016-2021-v1
+mkdir -p artifacts/logs reports/l3-nested-prehistory-size-adjusted-2016-2021-v2
 
 pid_file="artifacts/logs/l3-nested-prehistory.pid"
 log_file="artifacts/logs/l3-nested-prehistory.log"
@@ -20,16 +20,10 @@ if [[ "${1:-}" != "--worker" ]]; then
 fi
 
 trap 'printf "%s\tFAILED\tline=%s\n" "$(date --iso-8601=seconds)" "$LINENO" >"${status_file}"' ERR
-printf '%s\tRUNNING\tl3-nested-prehistory-size-2016-2021-v1\n' \
+printf '%s\tRUNNING\tl3-nested-prehistory-size-adjusted-2016-2021-v2\n' \
   "$(date --iso-8601=seconds)" >"${status_file}"
 
-manifest="reports/l3-nested-prehistory-size-2016-2021-v1/evaluation_manifest.json"
-if [[ -f "${manifest}" ]]; then
-  code_version="$('./.venv/bin/python' -c \
-    'import json,sys; print(json.load(open(sys.argv[1]))["code_version"])' "${manifest}")"
-else
-  code_version="$(git rev-parse HEAD)"
-fi
+code_version="$(git rev-parse HEAD)"
 
 /usr/bin/time -v .venv/bin/python scripts/evaluate_factors.py \
   --release-dir data/standard/history-release=cn_equity_history_20260717_001 \
@@ -46,7 +40,7 @@ fi
   --reload-per-batch \
   --resume \
   --neutralization size \
-  --report-dir reports/l3-nested-prehistory-size-2016-2021-v1
+  --report-dir reports/l3-nested-prehistory-size-adjusted-2016-2021-v2
 
-printf '%s\tPASS\tl3-nested-prehistory-size-2016-2021-v1\n' \
+printf '%s\tPASS\tl3-nested-prehistory-size-adjusted-2016-2021-v2\n' \
   "$(date --iso-8601=seconds)" >"${status_file}"

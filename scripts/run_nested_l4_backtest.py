@@ -14,7 +14,13 @@ from typing import Any
 
 import numpy as np
 
-from aquant.backtest import EventDrivenBacktest, UnfilledOrderPolicy, calculate_metrics
+from aquant.backtest import (
+    BacktestCheckpoint,
+    CorporateActionKind,
+    EventDrivenBacktest,
+    UnfilledOrderPolicy,
+    calculate_metrics,
+)
 from aquant.data.history import DuckDBMicrocapHistory
 from aquant.strategies import (
     CostScenario,
@@ -41,6 +47,8 @@ _BASE_COST_ASSUMPTIONS: dict[str, Any] = {
     "transfer_fee_rate_from_2022_04_29": 0.00001,
     "lot_size": 100,
     "maximum_prior_20d_average_volume_participation": 0.005,
+    "open_capacity_model_status": "DAILY_VOLUME_PROXY_RESEARCH_ONLY",
+    "production_data_dependency": "OPENING_AUCTION_OR_INTRADAY_VOLUME_AND_SUSPENSION_INTERVALS",
     "security_status_required": True,
     "unfilled_order_policy": "CANCEL_AFTER_OPEN",
     "tradability_rules": "SUSPENSION_AND_PRICE_LIMIT_AWARE",
@@ -75,17 +83,33 @@ def main() -> None:
     previous_equity = initial_equity
     strategy_returns: dict[date, float] = {}
     session_dates: list[date] = []
-    all_fills: list[Any] = []
-    all_orders: list[Any] = []
+    all_fills: dict[Any, Any] = {}
+    all_orders: dict[Any, Any] = {}
     fold_state_hashes: list[str] = []
     gross_notional = Decimal("0")
     total_fees = Decimal("0")
     total_ordered = 0
     total_filled = 0
-    boundary_liquidation_cost = Decimal("0")
+    delisting_settlements = 0
+    checkpoint: BacktestCheckpoint | None = None
     with DuckDBMicrocapHistory(args.history_release) as history:
+        history.release.verify(
+            "daily",
+            "daily_basic",
+            "dividend",
+            "fina_indicator",
+            "namechange",
+            "stk_limit",
+            "stock_basic",
+            "suspend_d",
+            "trade_cal",
+        )
         release_id = history.release.manifest.release_id
-        for fold_position, fold in enumerate(l3["folds"]):
+        fold_dates_by_id: dict[int, tuple[date, ...]] = {}
+        all_rebalance_configs: dict[date, SingleFactorConfig] = {}
+        all_snapshots: dict[date, SingleFactorSnapshot] = {}
+        selected_codes: set[str] = set()
+        for fold in l3["folds"]:
             fold_start = date.fromisoformat(fold["test_start"])
             fold_end = date.fromisoformat(fold["test_end"])
             fold_dates = history.trading_dates(fold_start, fold_end)
@@ -94,9 +118,9 @@ def main() -> None:
                 raise ValueError(
                     f"history sessions and L3 trading dates differ in fold {fold['fold']}"
                 )
+            fold_dates_by_id[int(fold["fold"])] = fold_dates
             rebalance_configs = _rebalance_configs({"folds": [fold]}, fold_dates)
-            snapshots: dict[date, SingleFactorSnapshot] = {}
-            selected_codes: set[str] = set()
+            all_rebalance_configs.update(rebalance_configs)
             for trade_date, config in rebalance_configs.items():
                 risk = history.snapshot(trade_date)
                 snapshot = _snapshots(
@@ -106,11 +130,21 @@ def main() -> None:
                     date_index=date_index,
                     code_index=code_index,
                 )[trade_date]
-                snapshots[trade_date] = snapshot
+                all_snapshots[trade_date] = snapshot
                 selected_codes.update(
                     symbol.canonical.replace(".XSHG", ".SH").replace(".XSHE", ".SZ")
                     for symbol in SingleFactorSelector(config).select(snapshot).symbols
                 )
+        live_strategy = SingleFactorEqualWeightStrategy(
+            snapshots=all_snapshots,
+            rebalance_dates=set(all_rebalance_configs),
+            config_by_rebalance_date=all_rebalance_configs,
+        )
+        for fold in l3["folds"]:
+            fold_start = date.fromisoformat(fold["test_start"])
+            fold_end = date.fromisoformat(fold["test_end"])
+            fold_dates = fold_dates_by_id[int(fold["fold"])]
+            expected_dates = tuple(value for value in dates if fold_start <= value <= fold_end)
             sessions = history.sessions(
                 fold_start,
                 fold_end,
@@ -119,24 +153,15 @@ def main() -> None:
             if tuple(session.trade_date for session in sessions) != expected_dates:
                 raise ValueError(f"filtered history sessions are incomplete in fold {fold['fold']}")
             fold_initial = previous_equity
-            if fold_position:
-                rate = _boundary_liquidation_rate(fold_start)
-                cost = fold_initial * rate
-                boundary_liquidation_cost += cost
-                fold_initial -= cost
             result = EventDrivenBacktest(
                 run_id=f"nested-l3-l4-{expected_l3_hash[:12]}-fold-{fold['fold']}",
                 initial_cash=fold_initial,
                 matcher=matcher_for_cost_scenario(CostScenario.BASE_COST),
                 unfilled_order_policy=UnfilledOrderPolicy.CANCEL_AFTER_OPEN,
-            ).run(
-                sessions,
-                SingleFactorEqualWeightStrategy(
-                    snapshots=snapshots,
-                    rebalance_dates=set(rebalance_configs),
-                    config_by_rebalance_date=rebalance_configs,
-                ),
-            )
+            ).run(sessions, live_strategy, checkpoint=checkpoint)
+            if result.checkpoint is None:
+                raise ValueError("nested L4 did not emit a resumable ledger checkpoint")
+            checkpoint = result.checkpoint
             metrics = calculate_metrics(result, initial_equity=fold_initial)
             orders = {order.order_id: order for order in result.orders}
             if not result.fills or not all(
@@ -147,16 +172,21 @@ def main() -> None:
             strategy_returns.update(_strategy_returns(result.equity_curve, previous_equity))
             previous_equity = metrics.final_equity
             session_dates.extend(fold_dates)
-            all_fills.extend(result.fills)
-            all_orders.extend(result.orders)
+            all_fills.update((fill.fill_id, fill) for fill in result.fills)
+            all_orders.update((order.order_id, order) for order in result.orders)
             fold_state_hashes.append(result.final_state_hash)
             gross_notional += sum((fill.notional for fill in result.fills), Decimal("0"))
             total_fees += metrics.total_fees
             total_ordered += sum(order.quantity for order in result.orders)
             total_filled += sum(fill.quantity for fill in result.fills)
-            del result, sessions, snapshots
+            delisting_settlements += sum(
+                action.kind is CorporateActionKind.DELISTING for action in result.corporate_actions
+            )
+            del result, sessions
             gc.collect()
-    t_plus_one = bool(all_fills)
+    ordered_fills = tuple(all_fills.values())
+    ordered_orders = tuple(all_orders.values())
+    t_plus_one = bool(ordered_fills)
     if not t_plus_one:
         raise ValueError("nested L4 produced no fills or violated T+1 execution")
     proxy, proxy_metadata = build_all_a_equal_weight_proxy(
@@ -181,7 +211,7 @@ def main() -> None:
         strategy_returns=strategy_returns,
         benchmark_returns=proxy_returns,
     )
-    fills_csv = _fills_csv(tuple(all_fills))
+    fills_csv = _fills_csv(ordered_fills)
     target_met = bool(
         performance["annual_excess_return"] >= 0.15
         or (performance["annual_excess_return"] >= 0.10 and performance["excess_sharpe"] > 0.8)
@@ -211,9 +241,12 @@ def main() -> None:
         "benchmark": proxy_metadata,
         "execution_assumptions": dict(_BASE_COST_ASSUMPTIONS),
         "fold_boundary_policy": {
-            "policy": "ANNUAL_OUTER_FOLD_LIQUIDATE_TO_CASH",
-            "reason": "bounded-memory nested execution with explicit conservative transition cost",
-            "total_estimated_liquidation_cost": str(boundary_liquidation_cost),
+            "policy": "CONTINUOUS_LEDGER_CHECKPOINT",
+            "reason": (
+                "positions, cash, receivables, and last marks carry across outer-fold "
+                "boundaries; changes require ordinary T+1 orders"
+            ),
+            "automatic_liquidation": False,
             "free_portfolio_reset": False,
         },
         "outer_test_used_for_optimization": False,
@@ -254,15 +287,19 @@ def main() -> None:
             },
         },
         "execution": {
-            "orders": len(all_orders),
-            "fills": len(all_fills),
+            "orders": len(ordered_orders),
+            "fills": len(ordered_fills),
             "fill_rate": str(Decimal(total_filled) / total_ordered if total_ordered else 0),
             "gross_turnover": str(gross_notional / initial_equity),
-            "total_fees": str(total_fees + boundary_liquidation_cost),
+            "total_fees": str(total_fees),
             "maximum_drawdown": str(-performance["maximum_drawdown"]),
             "final_equity": str(previous_equity),
             "final_state_hash": _hash({"fold_state_hashes": fold_state_hashes}),
             "t_plus_one_attested": t_plus_one,
+            "delisting_settlements": delisting_settlements,
+            "delisting_settlement_policy": (
+                "ZERO_ON_FIRST_MARKET_SESSION_ON_OR_AFTER_PIT_DELIST_DATE"
+            ),
         },
     }
     stable["content_hash"] = _hash(stable)
@@ -362,12 +399,6 @@ def _strategy_returns(equity_curve: tuple[Any, ...], initial: Decimal) -> dict[d
         result[snapshot.asof_time.date()] = equity / previous - 1
         previous = equity
     return result
-
-
-def _boundary_liquidation_rate(next_fold_start: date) -> Decimal:
-    stamp_duty = Decimal("0.001") if next_fold_start < date(2023, 8, 28) else Decimal("0.0005")
-    transfer_fee = Decimal("0.00002") if next_fold_start < date(2022, 4, 29) else Decimal("0.00001")
-    return Decimal("0.0005") + Decimal("0.0003") + stamp_duty + transfer_fee
 
 
 def _performance(

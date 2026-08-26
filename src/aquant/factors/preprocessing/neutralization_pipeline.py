@@ -51,6 +51,8 @@ class NeutralizationDiagnostics:
     design_rank: int
     size_correlation_before: float | None
     size_correlation_after: float | None
+    industry_coverage_ratio: float
+    neutralization_basis: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,7 +163,9 @@ def neutralize_pit_factor(
     values: npt.ArrayLike,
     exposures: PITExposurePanel,
     *,
-    method: Literal["industry", "size", "industry_size", "industry_proxy"] = "industry_size",
+    method: Literal[
+        "industry", "size", "industry_size", "industry_proxy", "industry_hybrid"
+    ] = "industry_size",
     style_exposures: Mapping[str, npt.ArrayLike] | None = None,
     minimum_observations: int = 20,
     minimum_industry_observations: int = 3,
@@ -173,7 +177,8 @@ def neutralize_pit_factor(
     winsorized = np.vstack([winsorize_mad(row, scale=winsorize_scale) for row in raw])
     normalized = np.vstack([zscore(row) for row in winsorized])
     proxy_designs: tuple[Array, ...] | None = None
-    if method == "industry_proxy":
+    hybrid = method in {"industry_proxy", "industry_hybrid"}
+    if hybrid:
         neutralized, proxy_designs = _industry_style_proxy_neutralize(
             normalized,
             exposures,
@@ -204,7 +209,7 @@ def neutralize_pit_factor(
         )
         statuses[row, finite_factor & raw_known_industry] = "SMALL_INDUSTRY"
         known_industry = np.asarray([value is not None for value in groups])
-        if method == "industry_proxy":
+        if hybrid:
             eligible = finite_factor
             statuses[row, finite_factor] = "INSUFFICIENT_CROSS_SECTION"
         elif method == "size":
@@ -215,7 +220,7 @@ def neutralize_pit_factor(
             eligible = finite_factor & known_industry & np.isfinite(caps) & (caps > 0)
         statuses[row, eligible] = "INSUFFICIENT_CROSS_SECTION"
         valid = np.isfinite(neutralized[row])
-        statuses[row, valid] = "VALID_PROXY" if method == "industry_proxy" else "VALID"
+        statuses[row, valid] = "VALID_HYBRID" if hybrid else "VALID"
         design = proxy_designs[row] if proxy_designs is not None else industry_exposures(groups)
         if method == "industry_size":
             size = np.full(caps.shape, np.nan)
@@ -225,9 +230,8 @@ def neutralize_pit_factor(
             NeutralizationDiagnostics(
                 trade_date=trade_date,
                 status=(
-                    "PROXY_PASS"
-                    if method == "industry_proxy"
-                    and np.count_nonzero(valid) >= minimum_observations
+                    "HYBRID_PASS"
+                    if hybrid and np.count_nonzero(valid) >= minimum_observations
                     else "PASS"
                     if np.count_nonzero(valid) >= minimum_observations
                     else "BLOCKED"
@@ -239,6 +243,18 @@ def neutralize_pit_factor(
                 else 0,
                 size_correlation_before=_weighted_size_correlation(normalized[row], caps),
                 size_correlation_after=_weighted_size_correlation(neutralized[row], caps),
+                industry_coverage_ratio=float(np.mean(raw_known_industry[finite_factor]))
+                if np.any(finite_factor)
+                else 0.0,
+                neutralization_basis=(
+                    "PIT_INDUSTRY_PLUS_STYLE_FALLBACK"
+                    if hybrid and np.any(raw_known_industry[finite_factor])
+                    else "PIT_STYLE_PROXY_ONLY"
+                    if hybrid
+                    else "PIT_INDUSTRY"
+                    if method in {"industry", "industry_size"}
+                    else "PIT_SIZE"
+                ),
             )
         )
     return PITNeutralizationResult(

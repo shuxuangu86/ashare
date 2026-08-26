@@ -53,3 +53,27 @@ def test_convergence_cache_rejects_conflicting_factor_replay(tmp_path: Path) -> 
     cache.write("a", np.ones((1, 1)))
     with pytest.raises(ValueError, match="content conflict"):
         cache.write("a", np.full((1, 1), 2))
+
+
+def test_convergence_cache_reopens_read_only_and_detects_tampering(tmp_path: Path) -> None:
+    root = tmp_path / "cache"
+    cache = ConvergenceCache.create(
+        root,
+        factor_ids=("a",),
+        trade_dates=(date(2026, 1, 1),),
+        ts_codes=("000001.SZ",),
+        close=np.ones((1, 1)),
+        data_release_id="cn_equity_20260717_001",
+        config_hash="a" * 64,
+    )
+    cache.write("a", np.ones((1, 1)))
+    cache.finalize()
+    readonly = ConvergenceCache(root, verify_content=True)
+    with pytest.raises(PermissionError, match="read-only"):
+        readonly.write("a", np.ones((1, 1)))
+
+    tampered = np.load(root / "close.npy", mmap_mode="r+")
+    tampered[0, 0] = 2
+    tampered.flush()
+    with pytest.raises(ValueError, match="close content was modified"):
+        ConvergenceCache(root, verify_content=True)

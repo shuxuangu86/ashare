@@ -12,6 +12,7 @@ import pytest
 
 from aquant.data.history import (
     DuckDBMicrocapHistory,
+    HistoryReleaseReader,
     TushareHistoryCatalog,
     TushareHistoryMaterializer,
 )
@@ -712,6 +713,10 @@ def test_materializer_corrects_units_windows_and_stock_metadata(tmp_path: Path) 
         }
     ]
     assert result.manifest.status == "MATERIALIZED_NOT_BACKTEST_APPROVED"
+    HistoryReleaseReader(result.release_directory).verify("daily", "daily_basic", "stock_basic")
+    daily_path.write_bytes(daily_path.read_bytes() + b"tampered")
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        HistoryReleaseReader(result.release_directory).verify("daily")
 
 
 def test_materializer_is_idempotent_and_rejects_window_reuse(tmp_path: Path) -> None:
@@ -909,10 +914,11 @@ def test_history_reader_enforces_fundamental_lag_and_builds_sessions(
     observation = snapshot.observations[0]
     assert observation.net_profit_yoy == 12
     assert observation.debt_to_assets == 40
-    # A suspend/resume event can coexist with valid daily bars.  A valid bar is
-    # definitive evidence that the security was not suspended for the full day.
+    # The snapshot cross-section treats a daily bar as evidence that the stock
+    # traded at some point. Session execution is stricter: without source time
+    # intervals, a suspension event cannot prove that 09:30 was tradable.
     assert not observation.suspended
     assert not observation.is_st
-    assert not sessions[0].statuses[0].suspended
+    assert sessions[0].statuses[0].suspended
     assert sessions[0].bars[0].volume == 10_000
     assert filtered_sessions[0].bars == sessions[0].bars

@@ -15,7 +15,7 @@ from aquant.factors.selection.cache import ConvergenceCache  # type: ignore[impo
 
 def main() -> None:
     args = _arguments()
-    cache = ConvergenceCache(args.cache_dir)
+    cache = ConvergenceCache(args.cache_dir, verify_content=True)
     cache_metadata = json.loads(cache.metadata_path.read_text())
     matrix_metadata = json.loads((args.market_matrices / "market_matrices.json").read_text())
     if cache_metadata.get("status") != "PASS" or matrix_metadata.get("status") != "PASS":
@@ -38,12 +38,15 @@ def main() -> None:
         inner_validation_dates=args.inner_validation_dates,
         inner_purge_dates=args.inner_purge_dates,
         maximum_training_rows=args.maximum_training_rows,
+        neutralization=cache.neutralization,
         provenance={
             "data_release_id": cache.data_release_id,
             "cache_config_hash": cache.config_hash,
             "cache_content_hash": cache_metadata["content_hash"],
             "market_matrix_content_hash": matrix_metadata["content_hash"],
             "label_price_basis": "ADJUSTED_CLOSE",
+            "feature_price_basis": cache.price_basis,
+            "neutralization": cache.neutralization,
             "diagnostic_retraining_after_outer_oos_observed": True,
             "code_version": args.code_version,
         },

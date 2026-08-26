@@ -6,6 +6,7 @@ import argparse
 import csv
 import hashlib
 import json
+import subprocess
 from collections import Counter, defaultdict
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -20,6 +21,7 @@ from aquant.domain.enums import Side  # type: ignore[import-untyped]
 
 def main() -> None:
     args = _arguments()
+    _attest_code_version(args.code_version)
     l3 = json.loads(args.l3_metadata.read_text())
     l4 = json.loads(args.l4_report.read_text())
     curve = list(csv.DictReader(args.daily_curve.open()))
@@ -88,6 +90,8 @@ def main() -> None:
             "l4_content_hash": l4["content_hash"],
             "history_release_id": l4["history_release_id"],
             "code_version": args.code_version,
+            "generator_file": "scripts/analyze_nested_l4_attribution.py",
+            "generator_sha256": _text_hash(Path(__file__).read_text(encoding="utf-8")),
         },
     }
     daily_csv = _csv_text(daily_rows)
@@ -107,6 +111,18 @@ def main() -> None:
     _write(args.output_dir / "family_rankic_attribution.csv", family_csv)
     _write(args.output_dir / "l4_return_conversion_attribution.md", _markdown(payload, fold_rows))
     print(json.dumps({"status": payload["status"], **path_summary, "diagnostics": diagnostics}))
+
+
+def _attest_code_version(declared: str) -> None:
+    root = Path(__file__).resolve().parents[1]
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    dirty = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=root,
+        text=True,
+    ).strip()
+    if declared != head or dirty:
+        raise ValueError("research artifacts require declared HEAD and a clean tracked worktree")
 
 
 def _arguments() -> argparse.Namespace:

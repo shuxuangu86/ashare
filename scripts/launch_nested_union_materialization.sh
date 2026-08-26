@@ -4,8 +4,8 @@ set -Eeuo pipefail
 cd /home/gsx1339/aquant
 
 pool="artifacts/l3_nested_walk_forward/fold_pools.json"
-report_dir="reports/l3-nested-union-size-2016-2026-v1"
-cache_dir="/mnt/d/AQuantEvaluation/convergence/l3-nested-union-size-2016-2026-v1"
+report_dir="reports/l3-nested-union-size-adjusted-2016-2026-v2"
+cache_dir="/mnt/d/AQuantEvaluation/convergence/l3-nested-union-size-adjusted-2016-2026-v2"
 pid_file="artifacts/logs/l3-nested-union.pid"
 log_file="artifacts/logs/l3-nested-union.log"
 status_file="artifacts/logs/l3-nested-union.status"
@@ -46,16 +46,10 @@ if [[ "${1:-}" != "--worker" ]]; then
 fi
 
 trap 'printf "%s\tFAILED\tline=%s\n" "$(date --iso-8601=seconds)" "$LINENO" >"${status_file}"' ERR
-printf '%s\tRUNNING\tl3-nested-union-size-2016-2026-v1\n' \
+printf '%s\tRUNNING\tl3-nested-union-size-adjusted-2016-2026-v2\n' \
   "$(date --iso-8601=seconds)" >"${status_file}"
 
-manifest="${report_dir}/evaluation_manifest.json"
-if [[ -f "${manifest}" ]]; then
-  code_version="$('./.venv/bin/python' -c \
-    'import json,sys; print(json.load(open(sys.argv[1]))["code_version"])' "${manifest}")"
-else
-  code_version="$(git rev-parse HEAD)"
-fi
+code_version="$(git rev-parse HEAD)"
 
 /usr/bin/time -v .venv/bin/python scripts/evaluate_factors.py \
   --release-dir data/standard/history-release=cn_equity_history_20260717_001 \
@@ -76,5 +70,5 @@ fi
   --convergence-cache "${cache_dir}" \
   --report-dir "${report_dir}"
 
-printf '%s\tPASS\tl3-nested-union-size-2016-2026-v1\n' \
+printf '%s\tPASS\tl3-nested-union-size-adjusted-2016-2026-v2\n' \
   "$(date --iso-8601=seconds)" >"${status_file}"

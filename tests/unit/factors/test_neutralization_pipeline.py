@@ -174,12 +174,14 @@ def test_industry_proxy_preserves_unknown_industries_and_removes_style_exposure(
     result = neutralize_pit_factor(
         values,
         PITExposurePanel(dates, groups, cap, available),
-        method="industry_proxy",
+        method="industry_hybrid",
         style_exposures={"beta": beta, "size": size},
     )
-    assert all(item.status == "PROXY_PASS" for item in result.diagnostics)
+    assert all(item.status == "HYBRID_PASS" for item in result.diagnostics)
+    assert result.diagnostics[0].industry_coverage_ratio == pytest.approx(0.75)
+    assert result.diagnostics[0].neutralization_basis == "PIT_INDUSTRY_PLUS_STYLE_FALLBACK"
     assert np.all(np.isfinite(result.neutralized_value))
-    assert np.all(result.neutralization_status == "VALID_PROXY")
+    assert np.all(result.neutralization_status == "VALID_HYBRID")
     assert abs(result.diagnostics[0].size_correlation_after or 0) < 1e-10
 
 

@@ -29,6 +29,7 @@ def _panel(*, future_multiplier: float = 1.0, cutoff: int = 300) -> FactorPanelI
         "close": close,
         "volume": volume,
         "amount": volume * (open_ + high + low + close) / 4,
+        "adj_factor": np.ones_like(close),
         "total_market_cap": close
         * (1_000_000_000 + np.arange(columns, dtype=float)[None, :] * 10_000_000),
     }

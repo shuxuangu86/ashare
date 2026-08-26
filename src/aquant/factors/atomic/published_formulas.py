@@ -299,7 +299,9 @@ class FormulaEvaluator:
         if lower in {"ret", "returns"}:
             return safe_div(self.close, delay(self.close)) - 1
         if lower == "vwap":
-            return safe_div(self._field("amount"), self._field("volume"))
+            return safe_div(self._field("amount"), self._field("volume")) * self._field(
+                "adj_factor"
+            )
         if lower == "cap":
             field = (
                 "total_market_cap"
@@ -737,6 +739,8 @@ def _required_fields(formula: str) -> tuple[str, ...]:
         fields.add("close")
     if "vwap" in lower or "adv" in lower:
         fields.update(("amount", "volume"))
+    if "vwap" in lower:
+        fields.add("adj_factor")
     if "cap" in lower:
         fields.add("total_market_cap")
     if any(token in lower for token in ("mkt", "mke", "benchmark")):

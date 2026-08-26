@@ -167,8 +167,7 @@ def _select_fold(
         if not np.isfinite(standard_deviation) or standard_deviation <= 1e-12:
             rejected[factor_id] = "DEGENERATE_TRAIN_RANK_IC"
             continue
-        t_statistic = mean / (standard_deviation / math.sqrt(observation_count))
-        p_value = math.erfc(abs(t_statistic) / math.sqrt(2.0))
+        t_statistic, p_value, hac_lags = _hac_test(directional, maximum_lags=5)
         annual_means = _annual_means(train_dates, values, direction)
         candidates[factor_id] = {
             "factor_id": factor_id,
@@ -182,6 +181,8 @@ def _select_fold(
             "train_rank_icir": mean / standard_deviation,
             "train_t_statistic": t_statistic,
             "raw_p_value": p_value,
+            "p_value_method": "NEWEY_WEST_HAC_NORMAL_APPROXIMATION",
+            "serial_correlation_lags": hac_lags,
             "train_daily_ic_coverage": coverage,
             "train_observations": observation_count,
             "annual_stability": sum(float(value[1]) >= 0 for value in annual_means)
@@ -251,6 +252,30 @@ def _select_fold(
         ),
     }
     return selected, diagnostics
+
+
+def _hac_test(values: npt.ArrayLike, *, maximum_lags: int) -> tuple[float, float, int]:
+    sample = np.asarray(values, dtype=np.float64)
+    sample = sample[np.isfinite(sample)]
+    if len(sample) < 2 or maximum_lags < 0:
+        raise ValueError("HAC test requires finite observations and non-negative lags")
+    centered = sample - np.mean(sample)
+    lags = min(maximum_lags, len(sample) - 1)
+    long_run_variance = float(np.dot(centered, centered) / len(sample))
+    for lag in range(1, lags + 1):
+        covariance = float(np.dot(centered[lag:], centered[:-lag]) / len(sample))
+        long_run_variance += 2 * (1 - lag / (lags + 1)) * covariance
+    variance_of_mean = max(long_run_variance, 0.0) / len(sample)
+    if variance_of_mean <= 1e-24:
+        statistic = (
+            0.0
+            if np.isclose(np.mean(sample), 0.0)
+            else math.copysign(float("inf"), float(np.mean(sample)))
+        )
+    else:
+        statistic = float(np.mean(sample) / math.sqrt(variance_of_mean))
+    p_value = math.erfc(abs(statistic) / math.sqrt(2.0))
+    return statistic, p_value, lags
 
 
 def _annual_means(

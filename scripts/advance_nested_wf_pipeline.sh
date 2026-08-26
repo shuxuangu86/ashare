@@ -3,12 +3,12 @@ set -Eeuo pipefail
 
 cd /home/gsx1339/aquant
 
-prehistory="reports/l3-nested-prehistory-size-2016-2021-v1"
-current_reports="reports/l2-v2-all-size-neutral-5y-v1"
-current_cache="/mnt/d/AQuantEvaluation/convergence/l2-v2-all-size-neutral-5y-v1"
+prehistory="reports/l3-nested-prehistory-size-adjusted-2016-2021-v2"
+current_reports="reports/l2-v2-all-size-neutral-adjusted-5y-v2"
+current_cache="/mnt/d/AQuantEvaluation/convergence/l2-v2-all-size-neutral-adjusted-5y-v2"
 release="data/standard/history-release=cn_equity_history_20260717_001"
 pool="artifacts/l3_nested_walk_forward/fold_pools.json"
-union_cache="/mnt/d/AQuantEvaluation/convergence/l3-nested-union-size-2016-2026-v1"
+union_cache="/mnt/d/AQuantEvaluation/convergence/l3-nested-union-size-adjusted-2016-2026-v2"
 l3_scores="/mnt/d/AQuantEvaluation/l3_nested_walk_forward/l3_scores.npy"
 l3_metadata="artifacts/l3_nested_walk_forward/l3_metadata.json"
 l4_output="artifacts/l3_nested_walk_forward/l4_backtest"
@@ -30,6 +30,7 @@ if [[ "${1:-}" == "--l3-worker" ]]; then
   printf '%s\tRUNNING\n' "$(date --iso-8601=seconds)" >artifacts/logs/nested-l3.status
   /usr/bin/time -v .venv/bin/python scripts/train_nested_l3.py \
     --cache-dir "${union_cache}" \
+    --history-release "${release}" \
     --fold-pools "${pool}" \
     --output-scores "${l3_scores}" \
     --output-metadata "${l3_metadata}" \

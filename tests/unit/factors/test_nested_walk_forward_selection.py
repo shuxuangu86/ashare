@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from aquant.factors.selection.nested_walk_forward import (
+    _hac_test,
     build_nested_l2_pools,
     define_outer_folds,
 )
@@ -103,6 +104,21 @@ def test_nested_selection_deduplicates_sign_mirrors(tmp_path: Path) -> None:
     )
 
     assert payload["folds"][0]["diagnostics"]["duplicate_count"] == 1
+
+
+def test_hac_significance_penalizes_overlapping_serially_correlated_ic() -> None:
+    rng = np.random.default_rng(41)
+    shocks = rng.normal(scale=0.01, size=1_000)
+    values = np.empty_like(shocks)
+    values[0] = 0.01 + shocks[0]
+    for index in range(1, len(values)):
+        values[index] = 0.01 + 0.85 * (values[index - 1] - 0.01) + shocks[index]
+    hac_statistic, hac_p_value, lags = _hac_test(values, maximum_lags=5)
+    iid_statistic = float(np.mean(values) / (np.std(values, ddof=1) / np.sqrt(len(values))))
+
+    assert lags == 5
+    assert 0 <= hac_p_value <= 1
+    assert abs(hac_statistic) < abs(iid_statistic)
 
 
 def _records(length: int) -> dict[str, dict[str, object]]:

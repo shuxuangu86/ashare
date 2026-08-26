@@ -158,7 +158,7 @@ def publish_feature_eligible_pool(
     ]
     payload: dict[str, Any] = {
         "status": "PASS",
-        "scope": "SIZE_NEUTRAL_OOS_L2_V2",
+        "scope": f"{str(manifest.get('neutralization', 'unknown')).upper()}_OOS_L2_V2",
         "data_release_id": manifest["data_release_id"],
         "evaluation_code_version": manifest["code_version"],
         "evaluation_config_hash": manifest["config_hash"],
@@ -172,8 +172,11 @@ def publish_feature_eligible_pool(
         "fdr_alpha": fdr_alpha,
         "direction_policy": "source_expected_direction_else_train_window_rank_ic_sign",
         "selection_policy": "family_archetypes_plus_pareto",
+        "price_basis": manifest.get("price_basis", "UNATTESTED_LEGACY"),
         "industry_neutralization_status": (
-            "NOT_AVAILABLE; industry_proxy is a separate robustness view"
+            "PIT_INDUSTRY_PLUS_EXPLICIT_STYLE_FALLBACK"
+            if manifest.get("neutralization") == "industry_hybrid"
+            else "NOT_APPLIED_IN_THIS_VIEW"
         ),
         "factor_ids": sorted(selected),
         "factors": [item for item in records if item["factor_id"] in selected],
@@ -271,7 +274,7 @@ def run_l3_family_smoke(
     from aquant.factors.aggregation.models import AlphaAggregator, ModelKind
     from aquant.factors.evaluation.protocol import pit_forward_return_labels
 
-    cache = ConvergenceCache(cache_root)
+    cache = ConvergenceCache(cache_root, verify_content=True)
     cache_metadata = json.loads(cache.metadata_path.read_text(encoding="utf-8"))
     pool = json.loads(pool_path.read_text(encoding="utf-8"))
     by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)

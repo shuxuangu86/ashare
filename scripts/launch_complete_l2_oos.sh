@@ -54,16 +54,18 @@ run_evaluation() {
 }
 
 run_worker() {
-  run_evaluation alpha191_original_v1 l2-v2-alpha191-5y-v2 raw
-  run_evaluation technical_classic_level_v1 l2-v2-technical-level-5y-v2 raw
-  run_evaluation technical_classic_change_v1 l2-v2-technical-change-5y-v1 raw
-  run_evaluation technical_classic_state_v1 l2-v2-technical-state-5y-v1 raw
-  run_evaluation technical_classic_divergence_v1 l2-v2-technical-divergence-5y-v1 raw
-  run_evaluation china_7000_rules_controlled_v1 l2-v2-china-rules-controlled-5y-v2 raw
+  run_evaluation alpha191_original_v1 l2-v2-alpha191-adjusted-5y-v3 raw
+  run_evaluation technical_classic_level_v1 l2-v2-technical-level-adjusted-5y-v3 raw
+  run_evaluation technical_classic_change_v1 l2-v2-technical-change-adjusted-5y-v2 raw
+  run_evaluation technical_classic_state_v1 l2-v2-technical-state-adjusted-5y-v2 raw
+  run_evaluation technical_classic_divergence_v1 l2-v2-technical-divergence-adjusted-5y-v2 raw
+  run_evaluation china_7000_rules_controlled_v1 \
+    l2-v2-china-rules-controlled-adjusted-5y-v3 raw
   AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
+    run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
   AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
+    run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
+    industry_hybrid \
     --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
     --industry-quality-report \
     artifacts/data_quality/industry_pit/sw_industry_pit_20260717_v3/20210719_20260717/quality.json
@@ -71,12 +73,15 @@ run_worker() {
 }
 
 run_worker_from_divergence() {
-  run_evaluation technical_classic_divergence_v1 l2-v2-technical-divergence-5y-v1 raw
-  run_evaluation china_7000_rules_controlled_v1 l2-v2-china-rules-controlled-5y-v2 raw
+  run_evaluation technical_classic_divergence_v1 \
+    l2-v2-technical-divergence-adjusted-5y-v2 raw
+  run_evaluation china_7000_rules_controlled_v1 \
+    l2-v2-china-rules-controlled-adjusted-5y-v3 raw
   AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
+    run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
   AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
+    run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
+    industry_hybrid \
     --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
     --industry-quality-report \
     artifacts/data_quality/industry_pit/sw_industry_pit_20260717_v3/20210719_20260717/quality.json
@@ -86,9 +91,10 @@ run_worker_from_divergence() {
 run_worker_from_size() {
   mkdir -p /mnt/d/AQuantEvaluation/convergence
   AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-size-neutral-5y-v1 size
+    run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
   AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-industry-proxy-5y-v1 industry_proxy \
+    run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
+    industry_hybrid \
     --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
     --industry-quality-report \
     artifacts/data_quality/industry_pit/sw_industry_pit_20260717_v3/20210719_20260717/quality.json

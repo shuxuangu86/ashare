@@ -66,6 +66,24 @@ def test_l4_configuration_uses_only_supplied_inner_validation() -> None:
     }
     assert all("target_met" in candidate for candidate in default_search["candidates"])
 
+    eligibility = np.zeros_like(scores, dtype=bool)
+    eligibility[:, :15] = True
+    controlled = select_l4_configuration(
+        scores=scores,
+        close=close,
+        trade_dates=dates,
+        validation_positions=validation,
+        target_counts=(10,),
+        frequencies=(RebalanceFrequency.MONTHLY,),
+        benchmark_returns=np.zeros(len(dates)),
+        eligibility_mask=eligibility,
+        open_prices=close,
+    )
+    assert controlled["benchmark_model"] == "PIT_ALL_A_SHARE_DAILY_EQUAL_PROXY"
+    assert controlled["eligibility_model"] == "PIT_LISTED_120D_NON_ST_NON_DELISTING_RISK"
+    assert controlled["execution_model"] == "T_CLOSE_SIGNAL_T_PLUS_1_OPEN_WEIGHT_TRANSITION"
+    assert controlled["candidates"][0]["annual_benchmark_return"] == 0
+
 
 def test_outer_fold_performance_is_reported_separately() -> None:
     dates = tuple(date(2021, 1, day) for day in range(1, 5))

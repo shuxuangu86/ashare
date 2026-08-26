@@ -1,3 +1,4 @@
+import hashlib
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import pytest
 
 from aquant.data.history.tushare import HistoryDatasetManifest, HistoryReleaseManifest
 from aquant.strategies.all_a_equal_proxy import build_all_a_equal_weight_proxy
+from aquant.strategies.nested_l4 import build_l4_eligibility_matrix
 
 
 def test_all_a_proxy_is_pit_equal_weighted_and_carries_suspensions(tmp_path: Path) -> None:
@@ -23,6 +25,12 @@ def test_all_a_proxy_is_pit_equal_weighted_and_carries_suspensions(tmp_path: Pat
     assert metadata["official_wind_index"] is False
     assert metadata["minimum_constituents"] == 1
     assert metadata["maximum_constituents"] == 2
+    eligibility = build_l4_eligibility_matrix(
+        tmp_path,
+        trade_dates=(date(2021, 1, 4), date(2021, 1, 5), date(2021, 1, 6)),
+        ts_codes=("000001.SZ", "600001.SH"),
+    )
+    assert eligibility.tolist() == [[False, True], [False, False], [False, True]]
 
 
 def _release(root: Path) -> None:
@@ -80,6 +88,20 @@ def _release(root: Path) -> None:
                 "delist_date": date(2022, 1, 1),
             },
         ],
+        "namechange": [
+            {
+                "ts_code": "600001.SH",
+                "name": "正常股份",
+                "start_date": date(2020, 1, 1),
+                "end_date": None,
+            },
+            {
+                "ts_code": "000001.SZ",
+                "name": "新股",
+                "start_date": date(2021, 1, 5),
+                "end_date": None,
+            },
+        ],
     }
     release_entries = []
     for name, rows in datasets.items():
@@ -93,13 +115,16 @@ def _release(root: Path) -> None:
             row_count=len(rows),
             min_date="2020-12-31",
             max_date="2021-01-06",
-            files=((path.name, "0" * 64, len(rows)),),
+            files=((path.name, hashlib.sha256(path.read_bytes()).hexdigest(), len(rows)),),
             source_page_count=1,
             source_fingerprint="1" * 64,
             transformations=(),
         )
-        (directory / "manifest.json").write_text(manifest.to_json(), encoding="utf-8")
-        release_entries.append((name, "2" * 64, len(rows)))
+        manifest_path = directory / "manifest.json"
+        manifest_path.write_text(manifest.to_json(), encoding="utf-8")
+        release_entries.append(
+            (name, hashlib.sha256(manifest_path.read_bytes()).hexdigest(), len(rows))
+        )
     release = HistoryReleaseManifest(
         schema_version="aquant.history-release.v1",
         release_id="proxy-test",

@@ -217,6 +217,7 @@ def _verified_industry_quality(
     start_date: date,
     end_date: date,
     allow_coverage_only_blocked: bool = False,
+    allow_partial_history: bool = False,
 ) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     expected = payload.pop("content_hash", None)
@@ -241,11 +242,12 @@ def _verified_industry_quality(
         raise ValueError("industry quality data release does not match evaluation")
     if payload.get("industry_release_hash") != industry_repository.content_hash:
         raise ValueError("industry quality report does not attest the selected industry release")
-    if (
-        date.fromisoformat(payload["start_date"]) > start_date
-        or date.fromisoformat(payload["end_date"]) < end_date
-    ):
+    quality_start = date.fromisoformat(payload["start_date"])
+    quality_end = date.fromisoformat(payload["end_date"])
+    if quality_end < end_date or (quality_start > start_date and not allow_partial_history):
         raise ValueError("industry quality report does not cover the evaluation range")
+    if allow_partial_history and quality_start > end_date:
+        raise ValueError("industry quality report does not overlap the evaluation range")
     return {**payload, "content_hash": expected}
 
 
@@ -276,6 +278,7 @@ def materialize_factors_main(argv: list[str] | None = None) -> int:
             "universe": args.universe,
             "start_date": args.start_date.isoformat(),
             "end_date": args.end_date.isoformat(),
+            "price_basis": "ADJ_FACTOR_SCALED",
         }
         if args.dry_run:
             _print(
@@ -348,7 +351,14 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--neutralization",
-        choices=("raw", "size", "industry", "industry_size", "industry_proxy"),
+        choices=(
+            "raw",
+            "size",
+            "industry",
+            "industry_size",
+            "industry_proxy",
+            "industry_hybrid",
+        ),
         default="raw",
     )
     parser.add_argument("--industry-release", type=Path)
@@ -371,7 +381,12 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
             raise ValueError("evaluation horizons, costs, batch and OOS fraction are invalid")
         industry_repository: IndustryPITRepository | None = None
         industry_quality: dict[str, Any] | None = None
-        if args.neutralization in {"industry", "industry_size", "industry_proxy"}:
+        if args.neutralization in {
+            "industry",
+            "industry_size",
+            "industry_proxy",
+            "industry_hybrid",
+        }:
             if args.industry_release is None or args.industry_quality_report is None:
                 raise ValueError(
                     "neutral evaluation requires --industry-release and --industry-quality-report"
@@ -383,7 +398,9 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                 data_release_id=str(args.data_release_id),
                 start_date=args.start_date,
                 end_date=args.end_date,
-                allow_coverage_only_blocked=args.neutralization == "industry_proxy",
+                allow_coverage_only_blocked=args.neutralization
+                in {"industry_proxy", "industry_hybrid"},
+                allow_partial_history=args.neutralization == "industry_hybrid",
             )
         if args.dry_run:
             _print({"status": "DRY_RUN", "factor_count": len(factors), "horizons": horizons})
@@ -402,6 +419,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
             "cost_bps": args.cost_bps,
             "oos_fraction": args.oos_fraction,
             "neutralization": args.neutralization,
+            "price_basis": "ADJ_FACTOR_SCALED",
             "industry_release_hash": (
                 industry_repository.content_hash if industry_repository is not None else None
             ),
@@ -416,7 +434,11 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
             args.convergence_cache is not None
             and (args.convergence_cache / "metadata.json").is_file()
         ):
-            convergence_cache = ConvergenceCache(args.convergence_cache)
+            convergence_cache = ConvergenceCache(
+                args.convergence_cache,
+                writable=True,
+                verify_content=True,
+            )
             if (
                 convergence_cache.factor_ids != tuple(factor.spec.factor_id for factor in factors)
                 or convergence_cache.data_release_id != str(args.data_release_id)
@@ -447,6 +469,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                     resumable.add(factor.spec.factor_id)
                     completed.append(factor.spec.factor_id)
                     reports.append((str(json_report), str(markdown_report)))
+        panel_loader = StandardPITFactorLoader(args.release_dir)
         shared_panel = None
         if not args.reload_per_batch:
             shared_pending = tuple(
@@ -459,7 +482,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                         | {field for factor in shared_pending for field in factor.spec.input_fields}
                     )
                 )
-                shared_panel = StandardPITFactorLoader(args.release_dir).load(
+                shared_panel = panel_loader.load(
                     fields=shared_fields,
                     start_date=args.start_date,
                     end_date=args.end_date,
@@ -484,7 +507,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
             )
             panel = shared_panel
             if panel is None:
-                panel = StandardPITFactorLoader(args.release_dir).load(
+                panel = panel_loader.load(
                     fields=fields,
                     start_date=args.start_date,
                     end_date=args.end_date,
@@ -527,6 +550,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                     close=panel.fields["close"],
                     data_release_id=str(args.data_release_id),
                     config_hash=config_hash,
+                    neutralization=args.neutralization.upper(),
                 )
             for factor in pending:
                 values = factor.compute_array(panel)
@@ -540,6 +564,7 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                                 "size",
                                 "industry_size",
                                 "industry_proxy",
+                                "industry_hybrid",
                             ],
                             args.neutralization,
                         ),
@@ -624,11 +649,12 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                                     if industry_quality is not None
                                     else None
                                 ),
-                                "industry_proxy_policy": (
-                                    "observed_pit_l1_plus_unknown_and_pit_style_exposures"
-                                    if args.neutralization == "industry_proxy"
+                                "industry_neutralization_policy": (
+                                    "observed_pit_l1_plus_explicit_pit_style_fallback"
+                                    if args.neutralization in {"industry_proxy", "industry_hybrid"}
                                     else None
                                 ),
+                                "price_basis": "ADJ_FACTOR_SCALED",
                             },
                         },
                     ),
@@ -647,6 +673,8 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                         "horizons": horizons,
                         "code_version": args.code_version,
                         "config_hash": config_hash,
+                        "neutralization": args.neutralization,
+                        "price_basis": "ADJ_FACTOR_SCALED",
                         "completed_factor_ids": completed,
                         "completed_count": len(completed),
                         "factor_count": len(factors),
@@ -670,6 +698,8 @@ def evaluate_factors_main(argv: list[str] | None = None) -> int:
                 "horizons": horizons,
                 "code_version": args.code_version,
                 "config_hash": config_hash,
+                "neutralization": args.neutralization,
+                "price_basis": "ADJ_FACTOR_SCALED",
                 "convergence_cache": (
                     str(args.convergence_cache) if args.convergence_cache is not None else None
                 ),

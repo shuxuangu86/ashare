@@ -26,7 +26,7 @@ def converge_cached_evaluation(
     maximum_distance: float = 0.5,
     selection_fraction: float = 0.8,
 ) -> dict[str, object]:
-    cache = ConvergenceCache(cache_root)
+    cache = ConvergenceCache(cache_root, verify_content=True)
     metadata = json.loads(cache.metadata_path.read_text(encoding="utf-8"))
     if metadata["status"] != "PASS" or not metadata.get("content_hash"):
         raise ValueError("convergence cache must be finalized before selection")

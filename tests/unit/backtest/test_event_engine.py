@@ -131,6 +131,27 @@ def test_same_inputs_produce_identical_orders_fills_and_result_hash() -> None:
     assert first.final_state_hash == second.final_state_hash
 
 
+def test_checkpoint_preserves_boundary_order_cash_positions_and_marks() -> None:
+    continuous = EventDrivenBacktest(run_id="checkpoint-part-1", initial_cash=Decimal("10000")).run(
+        SESSIONS, BuyThenSell()
+    )
+    first = EventDrivenBacktest(run_id="checkpoint-part-1", initial_cash=Decimal("10000")).run(
+        SESSIONS[:1], BuyThenSell()
+    )
+    assert first.checkpoint is not None
+    assert len(first.checkpoint.open_orders) == 1
+    second = EventDrivenBacktest(
+        run_id="checkpoint-part-2",
+        initial_cash=first.equity_curve[-1].equity,
+    ).run(SESSIONS[1:], BuyThenSell(), checkpoint=first.checkpoint)
+
+    assert [fill.price for fill in second.fills] == [Decimal("11"), Decimal("13")]
+    assert second.equity_curve == continuous.equity_curve[1:]
+    assert second.checkpoint is not None
+    assert second.checkpoint.ledger_state.cash == continuous.checkpoint.ledger_state.cash
+    assert second.checkpoint.ledger_state.positions == continuous.checkpoint.ledger_state.positions
+
+
 class UnfundedBuyer:
     def on_close(self, context: StrategyContext) -> tuple[OrderRequest, ...]:
         return (

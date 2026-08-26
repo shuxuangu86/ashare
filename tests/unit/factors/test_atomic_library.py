@@ -28,6 +28,7 @@ SUPPORTED_STANDARD_PIT_FIELDS = {
     "debt_to_assets",
     "up_limit",
     "down_limit",
+    "adj_factor",
 }
 
 
@@ -53,6 +54,7 @@ def panel(*, future_multiplier: float = 1.0, cutoff: int = 270) -> FactorPanelIn
         "debt_to_assets": 30 + securities + np.cos(timeline / 50),
         "up_limit": close * 1.1,
         "down_limit": close * 0.9,
+        "adj_factor": np.ones_like(close),
     }
     if future_multiplier != 1:
         for values in fields.values():

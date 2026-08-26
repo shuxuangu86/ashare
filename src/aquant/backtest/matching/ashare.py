@@ -96,7 +96,10 @@ class AshareOpenMatcher:
             return None
 
         slip = self._rules.slippage_bps / Decimal("10000")
-        price = bar.open * (Decimal("1") + slip if order.side is Side.BUY else Decimal("1") - slip)
+        slipped = bar.open * (
+            Decimal("1") + slip if order.side is Side.BUY else Decimal("1") - slip
+        )
+        price = min(max(slipped, bar.low), bar.high)
         if price <= 0:
             raise ValueError("slippage produced a non-positive execution price")
         fee_model = (

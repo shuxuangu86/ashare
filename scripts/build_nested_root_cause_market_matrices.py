@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from aquant.data.history.microcap import HistoryReleaseReader  # type: ignore[im
 
 def main() -> None:
     args = _arguments()
+    _attest_code_version(args.code_version)
     cache_metadata = json.loads((args.cache_dir / "metadata.json").read_text())
     if cache_metadata.get("status") != "PASS":
         raise ValueError("convergence cache must be complete")
@@ -86,6 +88,8 @@ def main() -> None:
             "method": "adjusted_price=raw_daily_price*cumulative_adj_factor",
             "outputs": outputs,
             "code_version": args.code_version,
+            "generator_file": "scripts/build_nested_root_cause_market_matrices.py",
+            "generator_sha256": _file_hash(Path(__file__)),
         }
         payload["content_hash"] = _hash(payload)
         _write_json(metadata_path, payload)
@@ -95,6 +99,18 @@ def main() -> None:
             for child in temporary_dir.iterdir():
                 child.unlink(missing_ok=True)
             temporary_dir.rmdir()
+
+
+def _attest_code_version(declared: str) -> None:
+    root = Path(__file__).resolve().parents[1]
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    dirty = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=root,
+        text=True,
+    ).strip()
+    if declared != head or dirty:
+        raise ValueError("research artifacts require declared HEAD and a clean tracked worktree")
 
 
 def _arguments() -> argparse.Namespace:
