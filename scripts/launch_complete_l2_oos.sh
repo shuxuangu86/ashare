@@ -40,14 +40,12 @@ run_evaluation() {
   local factor_set="$1"
   local report_name="$2"
   local neutralization="$3"
-  local convergence_root="${AQUANT_CONVERGENCE_ROOT:-artifacts/convergence}"
   shift 3
   printf '%s\tRUNNING\t%s\n' "$(date --iso-8601=seconds)" "${report_name}" >"${status_file}"
   /usr/bin/time -v .venv/bin/python scripts/evaluate_factors.py \
     "${common_args[@]}" \
     --factor-set "${factor_set}" \
     --report-dir "reports/${report_name}" \
-    --convergence-cache "${convergence_root}/${report_name}" \
     --neutralization "${neutralization}" \
     "$@"
   printf '%s\tPASS\t%s\n' "$(date --iso-8601=seconds)" "${report_name}" >"${status_file}"
@@ -61,10 +59,8 @@ run_worker() {
   run_evaluation technical_classic_divergence_v1 l2-v2-technical-divergence-adjusted-5y-v2 raw
   run_evaluation china_7000_rules_controlled_v1 \
     l2-v2-china-rules-controlled-adjusted-5y-v3 raw
-  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
-  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
+  run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
+  run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
     industry_hybrid \
     --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
     --industry-quality-report \
@@ -77,10 +73,8 @@ run_worker_from_divergence() {
     l2-v2-technical-divergence-adjusted-5y-v2 raw
   run_evaluation china_7000_rules_controlled_v1 \
     l2-v2-china-rules-controlled-adjusted-5y-v3 raw
-  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
-  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
+  run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
+  run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
     industry_hybrid \
     --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
     --industry-quality-report \
@@ -89,11 +83,8 @@ run_worker_from_divergence() {
 }
 
 run_worker_from_size() {
-  mkdir -p /mnt/d/AQuantEvaluation/convergence
-  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
-  AQUANT_CONVERGENCE_ROOT=/mnt/d/AQuantEvaluation/convergence \
-    run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
+  run_evaluation l2_v2_executable l2-v2-all-size-neutral-adjusted-5y-v2 size
+  run_evaluation l2_v2_executable l2-v2-all-industry-hybrid-adjusted-5y-v2 \
     industry_hybrid \
     --industry-release data/standard/industry-release=sw_industry_pit_20260717_v3 \
     --industry-quality-report \

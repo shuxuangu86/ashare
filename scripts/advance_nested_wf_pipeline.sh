@@ -5,7 +5,6 @@ cd /home/gsx1339/aquant
 
 prehistory="reports/l3-nested-prehistory-size-adjusted-2016-2021-v2"
 current_reports="reports/l2-v2-all-size-neutral-adjusted-5y-v2"
-current_cache="/mnt/d/AQuantEvaluation/convergence/l2-v2-all-size-neutral-adjusted-5y-v2"
 release="data/standard/history-release=cn_equity_history_20260717_001"
 pool="artifacts/l3_nested_walk_forward/fold_pools.json"
 union_cache="/mnt/d/AQuantEvaluation/convergence/l3-nested-union-size-adjusted-2016-2026-v2"
@@ -85,7 +84,6 @@ if [[ ! -f "${pool}" ]]; then
   .venv/bin/python scripts/build_nested_wf_l2_pools.py \
     --prehistory-report-dir "${prehistory}" \
     --current-report-dir "${current_reports}" \
-    --current-cache-dir "${current_cache}" \
     --release-dir "${release}" \
     --backtest-start 2021-07-19 \
     --backtest-end 2026-07-17 \

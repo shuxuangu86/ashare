@@ -18,9 +18,12 @@ from aquant.factors.selection.nested_walk_forward import build_nested_l2_pools
 def main() -> None:
     args = _arguments()
     pre_manifest = _complete_manifest(args.prehistory_report_dir)
-    _complete_manifest(args.current_report_dir)
-    current_metadata = json.loads((args.current_cache_dir / "metadata.json").read_text())
-    current_dates = tuple(date.fromisoformat(value) for value in current_metadata["trade_dates"])
+    current_manifest = _complete_manifest(args.current_report_dir)
+    current_dates = _trade_dates(
+        args.release_dir,
+        start=date.fromisoformat(current_manifest["start_date"]),
+        end=date.fromisoformat(current_manifest["end_date"]),
+    )
     outer_dates = tuple(
         value for value in current_dates if args.backtest_start <= value <= args.backtest_end
     )
@@ -53,7 +56,7 @@ def main() -> None:
             "current_manifest_hash": _file_hash(
                 args.current_report_dir / "evaluation_manifest.json"
             ),
-            "current_cache_hash": current_metadata["content_hash"],
+            "current_dates_source": "VERIFIED_HISTORY_RELEASE",
         },
     )
     print(
@@ -73,7 +76,6 @@ def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build leakage-safe nested walk-forward L2 pools")
     parser.add_argument("--prehistory-report-dir", type=Path, required=True)
     parser.add_argument("--current-report-dir", type=Path, required=True)
-    parser.add_argument("--current-cache-dir", type=Path, required=True)
     parser.add_argument("--release-dir", type=Path, required=True)
     parser.add_argument("--backtest-start", type=date.fromisoformat, required=True)
     parser.add_argument("--backtest-end", type=date.fromisoformat, required=True)
