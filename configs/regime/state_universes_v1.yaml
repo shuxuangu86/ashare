@@ -1,0 +1,30 @@
+version: "1.0.0"
+all_a:
+  id: ALL_A
+  membership: project_all_a_definition
+  pit_required: true
+  include_suspended_in_membership: true
+  include_suspended_in_trading_denominator: false
+indices:
+  - HS300
+  - CSI500
+  - CSI800
+  - CSI1000
+  - CSI2000
+  - DIVIDEND_INDEX
+  - CHINEXT
+  - STAR50
+microcap_dynamic:
+  id: MICROCAP_DYNAMIC
+  rebalance_frequency: DAILY
+  selection_key: free_float_market_value
+  pit_required: true
+microcap_fixed_monthly:
+  id: MICROCAP_FIXED_MONTHLY
+  rebalance_frequency: MONTHLY
+  selection_key: free_float_market_value
+  effective_rule: NEXT_TRADING_SESSION
+  pit_required: true
+prohibitions:
+  - CURRENT_MEMBERS_BACKFILLED_INTO_HISTORY
+  - FUTURE_CLASSIFICATION_BACKFILL

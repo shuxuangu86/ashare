@@ -1,0 +1,9 @@
+schema_version: aquant.industry-pit-quality-config.v1
+minimum_market_row_coverage: 0.95
+minimum_year_market_row_coverage: 0.95
+maximum_conflicting_market_rows: 0
+maximum_invalid_intervals: 0
+maximum_orphan_industry_codes: 0
+market_exchanges:
+  - XSHG
+  - XSHE

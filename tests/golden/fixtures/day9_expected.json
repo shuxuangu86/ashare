@@ -16,5 +16,5 @@
     {"price": "11", "quantity": 100, "side": "BUY"},
     {"price": "13", "quantity": 100, "side": "SELL"}
   ],
-  "final_state_hash": "cfaec355d00775a3faa0974f079265283001d05c7588102295eb1b6c90565a79"
+  "final_state_hash": "475d32380c4a0eeedcb3621facb38b1e97b0d02fe1a183077d048cd909fb4088"
 }

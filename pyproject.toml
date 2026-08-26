@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aquant"
-version = "0.2.1"
+version = "0.3.0a4"
 description = "Point-in-time safe A-share quantitative research and trading system"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -25,6 +25,7 @@ data = [
   "psycopg[binary,pool]>=3.2,<4",
   "redis>=5.2,<7",
   "sqlalchemy>=2.0,<3",
+  "tushare>=1.4.29,<2",
 ]
 research = [
   "lightgbm>=4.5,<5",

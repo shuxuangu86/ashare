@@ -7,7 +7,10 @@ from urllib.request import Request
 import pytest
 
 from aquant.data.providers import DatasetRequest, MarketDataProvider, TushareProvider
-from aquant.data.providers.tushare import HttpResponse, UrllibHttpTransport
+from aquant.data.providers.tushare import (
+    HttpResponse,
+    UrllibHttpTransport,
+)
 
 
 class RecordingTransport:

@@ -165,8 +165,8 @@ class TushareBulkArchiver:
     ) -> None:
         if not token.strip():
             raise ValueError("Tushare token must not be blank")
-        if not endpoint.startswith("https://"):
-            raise ValueError("bulk archive endpoint must use HTTPS")
+        if not endpoint.startswith(("http://", "https://")):
+            raise ValueError("bulk archive endpoint must use HTTP or HTTPS")
         if timeout_seconds <= 0 or minimum_interval_seconds < 0 or max_attempts <= 0:
             raise ValueError("invalid retry or throttle configuration")
         self._token = token.strip()

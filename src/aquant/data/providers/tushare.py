@@ -87,7 +87,7 @@ class TushareProvider:
         if timeout <= 0:
             raise ValueError("timeout must be positive")
         if not endpoint.startswith(("http://", "https://")):
-            raise ValueError("Tushare endpoint must use HTTP or HTTPS")
+            raise ValueError("data endpoint must use HTTP or HTTPS")
         self._token = token.strip()
         self._endpoint = endpoint
         self._timeout = timeout

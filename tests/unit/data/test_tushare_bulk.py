@@ -142,10 +142,10 @@ def test_nonretryable_api_error_is_archived_but_not_marked_complete(tmp_path: Pa
 def test_bulk_archiver_rejects_unsafe_or_invalid_configuration(tmp_path: Path) -> None:
     transport = SequenceTransport([])
 
-    with pytest.raises(ValueError, match="HTTPS"):
+    with pytest.raises(ValueError, match="HTTP"):
         TushareBulkArchiver(
             token="token",
-            endpoint="http://example.test",
+            endpoint="ftp://example.test",
             raw_root=tmp_path,
             state_path=tmp_path / "state.sqlite3",
             transport=transport,

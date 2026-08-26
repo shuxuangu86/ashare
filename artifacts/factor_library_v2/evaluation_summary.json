@@ -1,0 +1,170 @@
+{
+  "content_hash": "2efd17cc3c48a1b5fcc1495d46512ed691a35c8208041c59c48af8443d9708be",
+  "factor_count": 2569,
+  "family_multiple_testing": [
+    {
+      "family": "channel",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.017978781424831072,
+      "minimum_raw_p_value": 0.00014982317854025893,
+      "rejected_count": 4,
+      "trial_count": 120
+    },
+    {
+      "family": "formula_alpha",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 1.038824959886457e-07,
+      "minimum_raw_p_value": 7.13969044595503e-10,
+      "rejected_count": 45,
+      "trial_count": 291
+    },
+    {
+      "family": "growth",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.1089303046211645,
+      "minimum_raw_p_value": 0.02436003156510667,
+      "rejected_count": 0,
+      "trial_count": 7
+    },
+    {
+      "family": "interaction",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.03643673076427201,
+      "minimum_raw_p_value": 0.02007389510805974,
+      "rejected_count": 6,
+      "trial_count": 6
+    },
+    {
+      "family": "liquidity",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 1.928779011137927e-10,
+      "minimum_raw_p_value": 1.1060196589692496e-11,
+      "rejected_count": 18,
+      "trial_count": 20
+    },
+    {
+      "family": "microcap_risk",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.006375372058665968,
+      "minimum_raw_p_value": 0.0006584388678802534,
+      "rejected_count": 3,
+      "trial_count": 10
+    },
+    {
+      "family": "momentum",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.0003458896879686526,
+      "minimum_raw_p_value": 3.4060095103912323e-06,
+      "rejected_count": 29,
+      "trial_count": 208
+    },
+    {
+      "family": "oscillator",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.00011058943287248033,
+      "minimum_raw_p_value": 3.880330977981766e-07,
+      "rejected_count": 23,
+      "trial_count": 285
+    },
+    {
+      "family": "price_volume",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.006383686778821383,
+      "minimum_raw_p_value": 0.0003989804236763364,
+      "rejected_count": 4,
+      "trial_count": 16
+    },
+    {
+      "family": "quality",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.14064802031896056,
+      "minimum_raw_p_value": 0.03992428039628157,
+      "rejected_count": 0,
+      "trial_count": 5
+    },
+    {
+      "family": "regime",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.005519433969646712,
+      "minimum_raw_p_value": 9.373990344613522e-05,
+      "rejected_count": 16,
+      "trial_count": 60
+    },
+    {
+      "family": "reversal",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.0021767149597662428,
+      "minimum_raw_p_value": 2.6225481442966782e-05,
+      "rejected_count": 6,
+      "trial_count": 83
+    },
+    {
+      "family": "risk",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.05038914392513839,
+      "minimum_raw_p_value": 0.05038914392513839,
+      "rejected_count": 0,
+      "trial_count": 1
+    },
+    {
+      "family": "size",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.8344389775959403,
+      "minimum_raw_p_value": 0.6336283335238839,
+      "rejected_count": 0,
+      "trial_count": 5
+    },
+    {
+      "family": "technical_rule",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.18538154869825207,
+      "minimum_raw_p_value": 0.001190962881406924,
+      "rejected_count": 0,
+      "trial_count": 687
+    },
+    {
+      "family": "technical_sentiment",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.0887456313545624,
+      "minimum_raw_p_value": 0.028433190602046465,
+      "rejected_count": 0,
+      "trial_count": 7
+    },
+    {
+      "family": "trend",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 6.111763203345994e-07,
+      "minimum_raw_p_value": 2.213271437661162e-09,
+      "rejected_count": 28,
+      "trial_count": 511
+    },
+    {
+      "family": "value",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 0.5119088753305598,
+      "minimum_raw_p_value": 0.17063629177685327,
+      "rejected_count": 0,
+      "trial_count": 3
+    },
+    {
+      "family": "volatility",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 2.978138990979458e-05,
+      "minimum_raw_p_value": 2.7322376064031724e-07,
+      "rejected_count": 48,
+      "trial_count": 109
+    },
+    {
+      "family": "volume_price",
+      "fdr_alpha": 0.05,
+      "minimum_adjusted_p_value": 1.3656774892647659e-06,
+      "minimum_raw_p_value": 1.0116129550109377e-08,
+      "rejected_count": 33,
+      "trial_count": 135
+    }
+  ],
+  "feature_eligible_count": 140,
+  "research_validated_count": 2517,
+  "scope": "SIZE_NEUTRAL_OOS_L2_V2",
+  "status": "PASS"
+}

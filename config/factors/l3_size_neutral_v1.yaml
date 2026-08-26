@@ -1,0 +1,23 @@
+experiment_id: l3_size_neutral_v1
+research_status: RESEARCH_ONLY
+input_pool: artifacts/factor_library_v2/feature_eligible_pool.json
+input_neutralization: SIZE_NEUTRAL
+industry_neutralization: IGNORED
+target_horizon: 5
+family_methods:
+  - equal_weight
+  - ic_weight
+  - icir_weight
+  - ridge
+  - elastic_net
+family_selection:
+  development_folds: [0, 1]
+  holdout_fold: 2
+  holdout_used_for_selection: false
+  stability_penalty: 0.25
+  complexity_penalty: 0.001
+cross_family_stage:
+  status: PENDING
+  split: expanding_walk_forward
+  purge_days: 5
+  embargo_days: 5

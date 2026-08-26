@@ -7,12 +7,15 @@ import pytest
 from aquant.backtest import (
     AshareExecutionRules,
     AshareFeeModel,
+    AshareFeeSchedule,
     AshareOpenMatcher,
     BacktestOrder,
+    BacktestOrderStatus,
     EventDrivenBacktest,
     MarketSession,
     OrderRequest,
     StrategyContext,
+    UnfilledOrderPolicy,
     calculate_metrics,
     render_markdown_report,
 )
@@ -66,6 +69,22 @@ def test_fee_model_applies_minimum_commission_and_sell_tax() -> None:
         model.calculate(Side.BUY, Decimal("0"))
 
 
+def test_fee_schedule_uses_trade_date_and_fails_before_supported_history() -> None:
+    schedule = AshareFeeSchedule()
+    old = schedule.model_for(date(2021, 1, 4))
+    transfer_reduced = schedule.model_for(date(2022, 4, 29))
+    stamp_reduced = schedule.model_for(date(2023, 8, 28))
+
+    assert old.transfer_fee_rate == Decimal("0.00002")
+    assert transfer_reduced.transfer_fee_rate == Decimal("0.00001")
+    assert transfer_reduced.sell_stamp_duty_rate == Decimal("0.001")
+    assert stamp_reduced.sell_stamp_duty_rate == Decimal("0.0005")
+    with pytest.raises(ValueError, match="before 2015"):
+        schedule.model_for(date(2015, 7, 8))
+    with pytest.raises(ValueError, match="either"):
+        AshareOpenMatcher(fee_model=AshareFeeModel(), fee_schedule=schedule)
+
+
 def test_rule_aware_matcher_applies_lot_volume_slippage_and_fees() -> None:
     matcher = AshareOpenMatcher(
         rules=AshareExecutionRules(
@@ -86,6 +105,24 @@ def test_rule_aware_matcher_applies_lot_volume_slippage_and_fees() -> None:
     assert fill.quantity == 400
     assert fill.price == Decimal("10.010")
     assert fill.fee > 0
+
+
+@pytest.mark.parametrize(
+    ("side", "expected"),
+    [(Side.BUY, Decimal("10.5")), (Side.SELL, Decimal("9.5"))],
+)
+def test_slippage_price_is_clamped_to_observed_ohlc(side: Side, expected: Decimal) -> None:
+    matcher = AshareOpenMatcher(rules=AshareExecutionRules(slippage_bps=Decimal("1000")))
+    fill = matcher.match(
+        _order(side=side),
+        _bar(),
+        occurred_at=OPENED,
+        fill_id=UUID(int=22 if side is Side.BUY else 23),
+        available_cash=Decimal("100000"),
+        status=_status(),
+    )
+    assert fill is not None
+    assert fill.price == expected
 
 
 @pytest.mark.parametrize(
@@ -131,6 +168,36 @@ def test_missing_status_fails_closed_and_cash_includes_fees() -> None:
     assert fill is None
 
 
+def test_capacity_can_use_prior_20d_volume_without_seeing_fill_day_volume() -> None:
+    matcher = AshareOpenMatcher(
+        rules=AshareExecutionRules(
+            max_volume_participation=Decimal("0.05"),
+            use_prior_20d_average_volume=True,
+        )
+    )
+    assert (
+        matcher.match(
+            _order(),
+            _bar(volume="999999"),
+            occurred_at=OPENED,
+            fill_id=UUID(int=6),
+            available_cash=Decimal("100000"),
+            status=_status(),
+        )
+        is None
+    )
+    fill = matcher.match(
+        _order(),
+        _bar(volume="1"),
+        occurred_at=OPENED,
+        fill_id=UUID(int=7),
+        available_cash=Decimal("100000"),
+        status=_status(prior_20d_average_volume=Decimal("10000")),
+    )
+    assert fill is not None
+    assert fill.quantity == 500
+
+
 def test_rule_configuration_rejects_unsafe_values() -> None:
     with pytest.raises(ValueError):
         AshareExecutionRules(lot_size=0)
@@ -140,6 +207,8 @@ def test_rule_configuration_rejects_unsafe_values() -> None:
         AshareExecutionRules(slippage_bps=Decimal("-1"))
     with pytest.raises(ValueError):
         AshareFeeModel(commission_rate=Decimal("-1"))
+    with pytest.raises(ValueError, match="average volume"):
+        _status(prior_20d_average_volume=Decimal("-1"))
 
 
 class BuyOnce:
@@ -202,3 +271,23 @@ def test_rule_aware_engine_fails_closed_without_status() -> None:
     ).run((_session(15, with_status=False), _session(16, with_status=False)), BuyOnce())
     assert result.fills == ()
     assert result.orders[0].filled_quantity == 0
+
+
+def test_day_order_policy_prevents_a_blocked_order_from_filling_later() -> None:
+    blocked = _session(16, with_status=True)
+    blocked = MarketSession(
+        blocked.trade_date,
+        blocked.open_at,
+        blocked.close_at,
+        blocked.bars,
+        (_status(limit_status=LimitStatus.LIMIT_UP),),
+    )
+    result = EventDrivenBacktest(
+        run_id="day-order-cancel",
+        initial_cash=Decimal("2000"),
+        matcher=AshareOpenMatcher(),
+        unfilled_order_policy=UnfilledOrderPolicy.CANCEL_AFTER_OPEN,
+    ).run((_session(15, with_status=True), blocked, _session(17, with_status=True)), BuyOnce())
+
+    assert result.fills == ()
+    assert result.orders[0].status is BacktestOrderStatus.CANCELLED

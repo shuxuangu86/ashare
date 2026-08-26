@@ -1,0 +1,18 @@
+schema_version: aquant.index-replication.v1
+index_code: 000300.SH
+regular_adjustment: june_december_second_friday_next_session
+quality_gate:
+  maximum_monthly_difference_bps: 6
+  maximum_annual_difference_bps: 15
+  maximum_annualized_tracking_error_bps: 10
+temporary_adjustments:
+  - outgoing: 600837.SH
+    incoming: 601058.SH
+    effective_date: 20250304
+    reason: haitong_securities_delisting
+    source: https://finance.sina.com.cn/stock/relnews/cn/2025-03-04/doc-inennqmm8628146.shtml
+  - outgoing: 601989.SH
+    incoming: 601298.SH
+    effective_date: 20250905
+    reason: cssc_heavy_industry_delisting
+    source: https://www.sse.com.cn/disclosure/announcement/listing/stock/c/c_20250829_10790128.shtml

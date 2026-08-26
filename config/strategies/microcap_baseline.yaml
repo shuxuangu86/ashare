@@ -1,0 +1,22 @@
+strategy:
+  id: microcap-400-research-baseline
+  signal_version: microcap-total-market-cap-v1
+  target_count: 400
+  minimum_constituents: 400
+  minimum_listing_days: 120
+  exclude_st: true
+  exclude_suspended: true
+  exchanges:
+    - XSHG
+    - XSHE
+  rebalance_frequency: weekly
+  cash_buffer_weight: 0.02
+  lot_size: 100
+  unfilled_order_policy: CANCEL_AFTER_OPEN
+
+research_boundary:
+  official_index_replica: false
+  requires_point_in_time_snapshot: true
+  earliest_fill: next_session_open
+  fail_on_incomplete_universe: true
+  fail_when_target_below_one_lot: true

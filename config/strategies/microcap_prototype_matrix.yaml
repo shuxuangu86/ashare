@@ -1,0 +1,60 @@
+experiment:
+  id: microcap-prototype-matrix-v1
+  prototypes:
+    - smallest-100
+    - rank-101-400
+    - smallest-400
+    - executable-95
+    - dividend-quality-10
+    - low-pb-low-turnover-35
+  rebalance_frequencies:
+    - daily
+    - weekly
+    - monthly
+  cost_scenarios:
+    - frictionless
+    - rules-only
+    - base-cost
+    - double-cost
+
+capital_profiles:
+  research_initial_equity: 100000000
+  executable_initial_equity: 1000000
+  research_prototypes:
+    - smallest-100
+    - rank-101-400
+    - smallest-400
+
+execution:
+  signal_at: session_close
+  earliest_fill: next_session_open
+  lot_size: 100
+  cash_buffer_weight: 0.02
+  maximum_order_to_prior_20d_average_volume: 0.005
+  fail_when_prior_20d_average_volume_missing: true
+  unfilled_order_policy: CANCEL_AFTER_OPEN
+
+prototype_rules:
+  executable-95:
+    filters:
+      - pb > 0
+      - net_profit_yoy > 0
+    target_count: 95
+    sell_buffer_rank: 120
+  dividend-quality-10:
+    pipeline:
+      - highest dividend yield half
+      - lowest debt-to-assets half
+      - lowest 20-day turnover-volatility half
+      - smallest float-market-cap 10
+  low-pb-low-turnover-35:
+    pipeline:
+      - positive PB only
+      - lowest PB half
+      - lowest 20-day turnover-volatility half
+      - smallest total-market-cap 35
+
+pit:
+  combined_observation_available_at: max_of_populated_field_availability
+  fail_on_future_data: true
+  fail_on_incomplete_universe: true

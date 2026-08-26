@@ -1,8 +1,9 @@
 from dataclasses import dataclass
-from itertools import pairwise
 
 import numpy as np
 import numpy.typing as npt
+
+from aquant.factors.operators.cross_sectional import cs_rank
 
 Array = npt.NDArray[np.float64]
 
@@ -36,11 +37,14 @@ class FactorAnalyzer:
         ic: list[float] = []
         rank_ic: list[float] = []
         grouped: list[list[float]] = [[] for _ in range(quantiles)]
-        assignments: list[Array] = []
+        previous_assignment: Array | None = None
+        turnover_sum = 0.0
+        turnover_periods = 0
         for factor_row, return_row in zip(factors, returns, strict=True):
             valid = np.isfinite(factor_row) & np.isfinite(return_row)
             if np.count_nonzero(valid) < 2:
-                assignments.append(np.full(factor_row.shape, np.nan))
+                row_assignment = np.full(factor_row.shape, np.nan)
+                previous_assignment = row_assignment
                 continue
             x = factor_row[valid]
             y = return_row[valid]
@@ -50,7 +54,16 @@ class FactorAnalyzer:
             ranks = self._rank(x)
             groups = np.minimum((ranks * quantiles / len(x)).astype(int), quantiles - 1)
             row_assignment[valid] = groups
-            assignments.append(row_assignment)
+            if previous_assignment is not None:
+                turnover_valid = np.isfinite(previous_assignment) & np.isfinite(row_assignment)
+                if np.any(turnover_valid):
+                    turnover_sum += float(
+                        np.mean(
+                            previous_assignment[turnover_valid] != row_assignment[turnover_valid]
+                        )
+                    )
+                    turnover_periods += 1
+            previous_assignment = row_assignment
             for group in range(quantiles):
                 group_returns = y[groups == group]
                 if group_returns.size:
@@ -73,7 +86,7 @@ class FactorAnalyzer:
             monotonicity=self._correlation(
                 np.arange(quantiles, dtype=np.float64), np.asarray(quantile_returns)
             ),
-            turnover=self._turnover(assignments),
+            turnover=(turnover_sum / turnover_periods if turnover_periods else float("nan")),
             coverage=float(np.count_nonzero(np.isfinite(factors)) / factors.size),
         )
 
@@ -100,10 +113,9 @@ class FactorAnalyzer:
 
     @staticmethod
     def _rank(values: Array) -> Array:
-        order = np.argsort(values, kind="stable")
-        ranks = np.empty(values.size, dtype=np.float64)
-        ranks[order] = np.arange(values.size, dtype=np.float64)
-        return ranks
+        # Quantile assignment below expects zero-based ranks. Subtracting one
+        # preserves average ranks for ties without shifting group boundaries.
+        return np.asarray(cs_rank(values), dtype=np.float64) - 1.0
 
     @staticmethod
     def _correlation(left: Array, right: Array) -> float:
@@ -115,12 +127,3 @@ class FactorAnalyzer:
         if np.std(x) == 0 or np.std(y) == 0:
             return float("nan")
         return float(np.corrcoef(x, y)[0, 1])
-
-    @staticmethod
-    def _turnover(assignments: list[Array]) -> float:
-        changes: list[float] = []
-        for previous, current in pairwise(assignments):
-            valid = np.isfinite(previous) & np.isfinite(current)
-            if np.any(valid):
-                changes.append(float(np.mean(previous[valid] != current[valid])))
-        return float(np.mean(changes)) if changes else float("nan")

@@ -3,13 +3,19 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import ROUND_FLOOR, Decimal
+from enum import StrEnum
 from itertools import pairwise
 from typing import Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from aquant.backtest.accounting import PortfolioLedger, PortfolioSnapshot
+from aquant.backtest.accounting import (
+    PortfolioLedger,
+    PortfolioLedgerState,
+    PortfolioSnapshot,
+)
 from aquant.backtest.event_engine.events import (
     BacktestEvent,
+    CorporateActionAppliedEvent,
     EventPriority,
     SessionCloseEvent,
     SessionOpenEvent,
@@ -17,6 +23,7 @@ from aquant.backtest.event_engine.events import (
 from aquant.backtest.event_engine.queue import EventQueue
 from aquant.backtest.matching import (
     BacktestOrder,
+    BacktestOrderStatus,
     Fill,
     FillEvent,
     NextOpenMatcher,
@@ -24,6 +31,7 @@ from aquant.backtest.matching import (
     OrderRequest,
     OrderSubmittedEvent,
 )
+from aquant.domain.corporate_actions import CorporateAction
 from aquant.domain.enums import Side
 from aquant.domain.identifiers import Symbol
 from aquant.domain.market_data import DailyBar, SecurityStatus
@@ -37,6 +45,7 @@ class MarketSession:
     close_at: datetime
     bars: tuple[DailyBar, ...]
     statuses: tuple[SecurityStatus, ...] = ()
+    corporate_actions: tuple[CorporateAction, ...] = ()
 
     def __post_init__(self) -> None:
         opened = require_aware(self.open_at, field_name="open_at")
@@ -53,6 +62,11 @@ class MarketSession:
             status.trade_date != self.trade_date for status in self.statuses
         ):
             raise ValueError("market session security statuses are invalid")
+        action_ids = [action.action_id for action in self.corporate_actions]
+        if len(action_ids) != len(set(action_ids)) or any(
+            action.occurred_at.date() != self.trade_date for action in self.corporate_actions
+        ):
+            raise ValueError("market session corporate actions are invalid")
         object.__setattr__(self, "open_at", opened)
         object.__setattr__(self, "close_at", closed)
 
@@ -73,6 +87,18 @@ class EventDrivenStrategy(Protocol):
     def on_close(self, context: StrategyContext) -> tuple[OrderRequest, ...]: ...
 
 
+class UnfilledOrderPolicy(StrEnum):
+    KEEP_OPEN = "KEEP_OPEN"
+    CANCEL_AFTER_OPEN = "CANCEL_AFTER_OPEN"
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestCheckpoint:
+    ledger_state: PortfolioLedgerState
+    last_prices: tuple[tuple[Symbol, Decimal], ...]
+    open_orders: tuple[BacktestOrder, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class BacktestResult:
     run_id: str
@@ -81,6 +107,8 @@ class BacktestResult:
     fills: tuple[Fill, ...]
     equity_curve: tuple[PortfolioSnapshot, ...]
     final_state_hash: str
+    corporate_actions: tuple[CorporateAction, ...] = ()
+    checkpoint: BacktestCheckpoint | None = None
 
 
 SessionEvent = SessionOpenEvent | SessionCloseEvent
@@ -107,17 +135,21 @@ class EventDrivenBacktest:
         run_id: str,
         initial_cash: Decimal,
         matcher: OpenMatcher | None = None,
+        unfilled_order_policy: UnfilledOrderPolicy = UnfilledOrderPolicy.KEEP_OPEN,
     ) -> None:
         if not run_id.strip():
             raise ValueError("backtest run_id must not be blank")
         self._run_id = run_id.strip()
         self._initial_cash = Decimal(initial_cash)
         self._matcher = matcher or NextOpenMatcher()
+        self._unfilled_order_policy = unfilled_order_policy
 
     def run(
         self,
         sessions: tuple[MarketSession, ...],
         strategy: EventDrivenStrategy,
+        *,
+        checkpoint: BacktestCheckpoint | None = None,
     ) -> BacktestResult:
         self._validate_sessions(sessions)
         queue: EventQueue[SessionEvent] = EventQueue()
@@ -135,11 +167,19 @@ class EventDrivenBacktest:
             )
 
         order_book = OrderBook()
-        ledger = PortfolioLedger(self._initial_cash)
+        if checkpoint is not None:
+            for order in checkpoint.open_orders:
+                order_book.submit(order)
+        ledger = (
+            PortfolioLedger(self._initial_cash)
+            if checkpoint is None
+            else PortfolioLedger.from_state(checkpoint.ledger_state)
+        )
         events: list[BacktestEvent] = []
         equity_curve: list[PortfolioSnapshot] = []
         order_sequence = 0
         fill_sequence = 0
+        last_prices = {} if checkpoint is None else dict(checkpoint.last_prices)
 
         while queue:
             scheduled = queue.pop()
@@ -149,6 +189,12 @@ class EventDrivenBacktest:
             if isinstance(event, SessionOpenEvent):
                 bars = session.bar_by_symbol()
                 statuses = session.status_by_symbol()
+                for action in sorted(
+                    session.corporate_actions,
+                    key=lambda item: (item.occurred_at, str(item.action_id)),
+                ):
+                    ledger.apply_corporate_action(action)
+                    events.append(CorporateActionAppliedEvent(action))
                 for order in order_book.eligible_orders(event.occurred_at):
                     bar = bars.get(order.symbol)
                     if bar is None:
@@ -165,16 +211,24 @@ class EventDrivenBacktest:
                         status=statuses.get(order.symbol),
                     )
                     if fill is None:
+                        if self._unfilled_order_policy is UnfilledOrderPolicy.CANCEL_AFTER_OPEN:
+                            order_book.cancel(order.order_id)
                         continue
                     order_book.validate_fill(fill)
                     ledger.validate_fill(fill)
                     order_book.apply_fill(fill)
                     ledger.apply_fill(fill)
                     events.append(FillEvent(fill))
+                    updated = order_book.get(order.order_id)
+                    if (
+                        self._unfilled_order_policy is UnfilledOrderPolicy.CANCEL_AFTER_OPEN
+                        and updated.remaining_quantity
+                    ):
+                        order_book.cancel(order.order_id)
                 continue
 
-            prices = {bar.symbol: bar.close for bar in session.bars}
-            snapshot = ledger.snapshot(asof_time=event.occurred_at, prices=prices)
+            last_prices.update((bar.symbol, bar.close) for bar in session.bars)
+            snapshot = ledger.snapshot(asof_time=event.occurred_at, prices=last_prices)
             equity_curve.append(snapshot)
             context = StrategyContext(session, snapshot)
             for request in strategy.on_close(context):
@@ -190,6 +244,15 @@ class EventDrivenBacktest:
                 events.append(OrderSubmittedEvent(order))
 
         final_hash = self._result_hash(order_book.orders, ledger, equity_curve)
+        final_checkpoint = BacktestCheckpoint(
+            ledger.export_state,
+            tuple(sorted(last_prices.items(), key=lambda item: item[0])),
+            tuple(
+                order
+                for order in order_book.orders
+                if order.status in {BacktestOrderStatus.OPEN, BacktestOrderStatus.PARTIALLY_FILLED}
+            ),
+        )
         return BacktestResult(
             self._run_id,
             tuple(events),
@@ -197,6 +260,8 @@ class EventDrivenBacktest:
             ledger.fills,
             tuple(equity_curve),
             final_hash,
+            ledger.corporate_actions,
+            final_checkpoint,
         )
 
     def _identifier(self, kind: str, sequence: int) -> UUID:

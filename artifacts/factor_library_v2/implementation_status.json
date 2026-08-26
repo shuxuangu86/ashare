@@ -1,0 +1,31 @@
+{
+  "counts": {
+    "FORMULA_AMBIGUOUS": 1,
+    "IMPLEMENTED": 2569
+  },
+  "deferred_intraday": [
+    {
+      "source_id": "SRC_DONGWU_TECH_SERIES",
+      "status": "DEFERRED_INTRADAY"
+    },
+    {
+      "source_id": "SRC_CSC_TECH_HF_20240623",
+      "status": "DEFERRED_INTRADAY"
+    }
+  ],
+  "formula_ambiguities": [
+    {
+      "factor_id": "gtja191_143",
+      "notes": "Public formula contains a documented typo, ambiguous operator, or unavailable exposure.",
+      "source_formula_id": "143",
+      "source_id": "SRC_GTJA_ALPHA191",
+      "status": "FORMULA_AMBIGUOUS"
+    }
+  ],
+  "missing_data_dependencies": [
+    "gross_profit financial PIT fields",
+    "asset growth financial PIT fields",
+    "minute bars and minute turnover"
+  ],
+  "schema_version": "aquant.factor-implementation-status.v2"
+}

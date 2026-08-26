@@ -1,0 +1,171 @@
+schema_version: aquant.factor-source-registry.v1
+sources:
+  - source_id: SRC_ALPHA101
+    title: 101 Formulaic Alphas
+    authors_or_institution: Zura Kakushadze; Geoffrey Lauprete; Igor Tulchinsky
+    publication_date: 2016-01-05
+    source_type: FORMULA_LIBRARY
+    identifier: arXiv:1601.00991
+    public_access_status: PUBLIC
+    local_file: null
+    content_hash: 1f9c21afe32dcb3ee77b31548acdaea00451fbfa1c0ee10c907867bcc736fce9
+    factor_families: [formula_alpha, price_volume]
+    required_data: [bars_1d, vwap, industry_pit]
+    implementation_status: IMPLEMENTED
+    notes: 101/101 formulas registered; derived VWAP and industry adaptations are explicitly labeled.
+  - source_id: SRC_GTJA_ALPHA191
+    title: 基于短周期价量特征的多因子选股体系
+    authors_or_institution: 国泰君安证券; 李辰; 刘富兵
+    publication_date: 2017-06-15
+    source_type: BROKER_REPORT
+    identifier: 国泰君安数量化专题之九十三
+    public_access_status: METADATA_ONLY
+    local_file: null
+    content_hash: 863f62c2e23bd87ddb42b8338c8fe2b0276d94260ac985e1a0edfff318693c6c
+    factor_families: [formula_alpha, price_volume]
+    required_data: [bars_1d, vwap, industry_pit]
+    implementation_status: IMPLEMENTED
+    notes: User-supplied local PDF audited; 190/191 executable and Alpha143 remains FORMULA_AMBIGUOUS.
+  - source_id: SRC_BOC_TECH_20230913
+    title: 基于经典技术指标构建选股多因子框架
+    authors_or_institution: 中银证券; 郭策
+    publication_date: 2023-09-13
+    source_type: BROKER_REPORT
+    identifier: 中银多因子选股系列（六）
+    public_access_status: METADATA_ONLY
+    factor_families: [trend, oscillator, volume_price]
+    required_data: [bars_1d]
+    implementation_status: IMPLEMENTED
+    notes: Standard indicator definitions are implemented as derived daily variants.
+  - source_id: SRC_DONGHAI_TECH_ML_20201120
+    title: 技术因子的智能择股研究——利用机器学习技术建立智能策略分析框架
+    authors_or_institution: 东海证券; 丁竞渊
+    publication_date: 2020-11-20
+    source_type: BROKER_REPORT
+    identifier: 东海证券技术因子研究
+    public_access_status: METADATA_ONLY
+    factor_families: [trend, channel, volatility, turnover]
+    required_data: [bars_1d, daily_basic_pit]
+    implementation_status: IMPLEMENTED
+    notes: Feature definitions only; AQuant walk-forward protocol supersedes report training.
+  - source_id: SRC_BROCK_LAKONISHOK_LEBARON
+    title: Simple Technical Trading Rules and the Stochastic Properties of Stock Returns
+    authors_or_institution: William Brock; Josef Lakonishok; Blake LeBaron
+    publication_date: 1992-12-01
+    source_type: ACADEMIC_PAPER
+    identifier: DOI:10.1111/j.1540-6261.1992.tb04681.x
+    public_access_status: BIBLIOGRAPHIC
+    factor_families: [trend, channel]
+    required_data: [bars_1d]
+    implementation_status: IMPLEMENTED
+    notes: Continuous cross-sectional forms accompany discrete rules.
+  - source_id: SRC_HAN_YANG_ZHOU_2013
+    title: A New Anomaly - The Cross-Sectional Profitability of Technical Analysis
+    authors_or_institution: Yufeng Han; Ke Yang; Guofu Zhou
+    publication_date: 2013-12-01
+    source_type: ACADEMIC_PAPER
+    identifier: DOI:10.1017/S0022109013000586
+    public_access_status: BIBLIOGRAPHIC
+    factor_families: [interaction, trend]
+    required_data: [bars_1d, daily_basic_pit]
+    implementation_status: IMPLEMENTED
+    notes: 7 components and 6 two-way interactions; market residuals use an explicit A-share proxy.
+  - source_id: SRC_CHINA_7000_RULES
+    title: Testing the Performance of Technical Trading Rules in the Chinese Market
+    authors_or_institution: Shan Wang; Zhi-Qiang Jiang; Sai-Ping Li; Wei-Xing Zhou
+    publication_date: 2015-04-24
+    source_type: ACADEMIC_PAPER
+    identifier: arXiv:1504.06397
+    public_access_status: PUBLIC
+    factor_families: [technical_rule]
+    required_data: [bars_1d]
+    implementation_status: IMPLEMENTED
+    notes: 687 controlled variants across five source families; full 7,846-trial space remains declared, not materialized.
+  - source_id: SRC_TECH_SENTIMENT_2023
+    title: Technical Analysis as a Sentiment Barometer and the Cross-Section of Stock Returns
+    authors_or_institution: Wenjie Ding; Khelifa Mazouz; Owain ap Gwilym; Qingwei Wang
+    publication_date: 2023-08-18
+    source_type: ACADEMIC_PAPER
+    identifier: DOI:10.1080/14697688.2023.2244991
+    public_access_status: BIBLIOGRAPHIC
+    factor_families: [technical_sentiment]
+    required_data: [derived_technical_signals]
+    implementation_status: IMPLEMENTED
+    notes: 7 L2 breadth, agreement, dispersion, and net-sentiment inputs from 10 pre-declared rules.
+  - source_id: SRC_DONGWU_TECH_SERIES
+    title: 技术分析拥抱选股因子系列
+    authors_or_institution: 东吴证券
+    publication_date: 2021-01-01
+    source_type: BROKER_REPORT
+    identifier: 东吴证券技术分析拥抱选股因子系列
+    public_access_status: METADATA_ONLY
+    factor_families: [turnover, volume_price]
+    required_data: [bars_1d, bars_1m]
+    implementation_status: DEFERRED_INTRADAY
+    notes: Daily prototypes are allowed; UTD/UTR minute distributions remain deferred.
+  - source_id: SRC_CSC_TECH_HF_20240623
+    title: 技术指标因子高频化
+    authors_or_institution: 中信建投证券
+    publication_date: 2024-06-23
+    source_type: BROKER_REPORT
+    identifier: 中信建投技术指标因子高频化
+    public_access_status: METADATA_ONLY
+    factor_families: [momentum, volatility, intraday]
+    required_data: [bars_1d, bars_1m]
+    implementation_status: DEFERRED_INTRADAY
+    notes: Daily prototypes implemented; minute aggregation specifications deferred.
+  - source_id: SRC_FAMA_FRENCH_2015
+    title: A Five-Factor Asset Pricing Model
+    authors_or_institution: Eugene F. Fama; Kenneth R. French
+    publication_date: 2015-04-01
+    source_type: ACADEMIC_PAPER
+    identifier: DOI:10.1016/j.jfineco.2014.10.010
+    public_access_status: BIBLIOGRAPHIC
+    factor_families: [size, value, profitability, investment]
+    required_data: [financials_pit, daily_basic_pit]
+    implementation_status: DATA_DEPENDENCY_MISSING
+    notes: Size and PIT PB-derived book-to-market implemented; profitability and investment remain DATA_DEPENDENCY_MISSING.
+  - source_id: SRC_JEGADEESH_TITMAN_1993
+    title: Returns to Buying Winners and Selling Losers
+    authors_or_institution: Narasimhan Jegadeesh; Sheridan Titman
+    publication_date: 1993-03-01
+    source_type: ACADEMIC_PAPER
+    identifier: DOI:10.1111/j.1540-6261.1993.tb04702.x
+    public_access_status: BIBLIOGRAPHIC
+    factor_families: [momentum]
+    required_data: [bars_1d]
+    implementation_status: IMPLEMENTED
+    notes: Continuous 3-12 month company-level momentum variants.
+  - source_id: SRC_NOVY_MARX_2013
+    title: The Other Side of Value - The Gross Profitability Premium
+    authors_or_institution: Robert Novy-Marx
+    publication_date: 2013-01-01
+    source_type: ACADEMIC_PAPER
+    identifier: DOI:10.1016/j.jfineco.2013.01.003
+    public_access_status: BIBLIOGRAPHIC
+    factor_families: [profitability, quality]
+    required_data: [financials_pit]
+    implementation_status: DATA_DEPENDENCY_MISSING
+    notes: Requires PIT gross-profit fields with announcement and revision metadata.
+  - source_id: SRC_AMIHUD_2002
+    title: Illiquidity and Stock Returns - Cross-Section and Time-Series Effects
+    authors_or_institution: Yakov Amihud
+    publication_date: 2002-01-01
+    source_type: ACADEMIC_PAPER
+    identifier: DOI:10.1016/S1386-4181(01)00024-6
+    public_access_status: BIBLIOGRAPHIC
+    factor_families: [liquidity]
+    required_data: [bars_1d]
+    implementation_status: IMPLEMENTED
+    notes: Amount is standardized in CNY; zero/suspended observations are missing.
+  - source_id: SRC_COOPER_GULEN_SCHILL_2008
+    title: Asset Growth and the Cross-Section of Stock Returns
+    authors_or_institution: Michael Cooper; Huseyin Gulen; Michael Schill
+    publication_date: 2008-08-01
+    source_type: ACADEMIC_PAPER
+    identifier: DOI:10.1111/j.1540-6261.2008.01370.x
+    public_access_status: BIBLIOGRAPHIC
+    factor_families: [investment, growth]
+    required_data: [financials_pit]
+    implementation_status: DATA_DEPENDENCY_MISSING
+    notes: Requires PIT balance-sheet histories with revision metadata.

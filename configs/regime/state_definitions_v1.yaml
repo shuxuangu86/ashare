@@ -1,0 +1,54 @@
+version: "1.0.0"
+release_status: DRAFT
+availability_policy: CLOSE_DERIVED_T_PLUS_ONE
+registered_state_target: 350
+catalog_source: aquant.regime.catalog.core_state_registry
+generated_families:
+  - trend
+  - breadth
+  - volatility
+  - valuation
+  - risk_appetite
+  - fundamentals
+families:
+  style:
+    windows: [5, 20, 40, 60, 120]
+    states:
+      - growth_return
+      - value_return
+      - growth_minus_value_return
+  index_relative:
+    windows: [5, 20, 40, 60, 120, 252]
+    states:
+      - hs300_minus_csi2000_return
+  liquidity:
+    states:
+      - hs300_amount_share_all_a
+      - hs300_amount_share_20d
+      - hs300_amount_share_percentile_3y
+      - csi1000_turnover_daily
+      - csi1000_turnover_20d
+      - csi1000_turnover_percentile_3y
+  valuation:
+    states:
+      - microcap_pb_median
+      - microcap_pb_percentile_3y
+      - microcap_pb_percentile_5y
+      - microcap_pb_percentile_expanding
+      - dividend_index_dividend_yield_mean
+      - dividend_index_dividend_yield_median
+      - dividend_index_dividend_yield_ffmv_weighted
+      - dividend_yield_percentile_3y
+  crowding:
+    release_status: DRAFT
+    states:
+      - microcap_amount_share
+      - microcap_turnover
+      - microcap_relative_valuation
+      - microcap_relative_momentum
+      - microcap_breadth
+      - microcap_crowding_score_v1
+dependency_status:
+  implemented: 307
+  partial: 14
+  data_dependency_missing: 29

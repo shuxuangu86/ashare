@@ -1,0 +1,9 @@
+{
+  "content_hash": "8215a30eb81e8d673c01abeaec8395baeb4a878361164bfccda25b6a2ecf8b60",
+  "factor_ids": [],
+  "reason_codes": [
+    "STRICT_PRODUCTION_GATE_NOT_RUN_IN_FEATURE_SELECTION_STAGE"
+  ],
+  "status": "NOT_RUN",
+  "tier": "STANDALONE_PRODUCTION_ALPHA"
+}
